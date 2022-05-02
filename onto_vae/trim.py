@@ -365,7 +365,7 @@ class ontoobj():
                 sys.exit('trimmed annot file missing, create_trim_dag_files function needs to be run first!')
 
             if os.path.isfile(self.working_dir + '/genes/' + self.prefix + '_trimmed_genes.txt'):
-                onto_genes = pd.read_csv(self.working_dir + '/genes/' + self.prefix + '_trimmed_genes.txt')
+                onto_genes = pd.read_csv(self.working_dir + '/genes/' + self.prefix + '_trimmed_genes.txt', header=None)
             else:
                 sys.exit('trimmed genes file missing, create_trim_dag_files function needs to be run first!')
         else:
