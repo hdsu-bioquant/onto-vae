@@ -389,7 +389,6 @@ class ontoobj():
         # create subdirectory
         if not os.path.exists(self.working_dir + '/masks'):
             os.mkdir(self.working_dir + '/masks')
-        add_prefix = ''
 
         # get all possible depth combos
         depth = onto_annot.loc[:,['ID', 'depth']]
@@ -408,6 +407,7 @@ class ontoobj():
         idx = [[mat.columns.name in mask_cols[i] and mat.index.name == mask_rows[i] for mat in bin_mat_list] for i in range(len(mask_rows))]
         masks = [np.array(pd.concat([N for i,N in enumerate(bin_mat_list) if j[i] == True][::-1], axis=1)) for j in idx]
 
+        # save new mask file
         with open(self.working_dir + '/masks/' + self.prefix + add_prefix + '_decoder_masks.pickle', 'wb') as f:
             pickle.dump(masks, f) 
         print('Decoder masks have been saved.')
