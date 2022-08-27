@@ -16,39 +16,39 @@ from onto_vae.utils import *
 class ontoobj():
     """
     This class is used for importing and processing an obo file and returning 
-    all the neccessary files for training an OntoVAE model:
+    all the neccessary ontology files for training an OntoVAE model:
     - the DAG as dict
     - DAG annotation file
     - Ontology genes file
     - decoder masks
     - Wang semantic similarities
+    It can also be used to match a given gene expression dataset to with the ontology
+    so that the dataset can be used as input for OntoVAE
 
     Parameters
     -------------
-    obo
-        Path to the obo file
-    gene_annot
-        gene_annot
-        Path two a tab-separated 2-column text file
-        Gene1   Term1
-        Gene1   Term211
-        ...
     working_dir
-        working directory where to store output files
+        working directory where to store output files of ontology processing
+        ontoobj will build the following substructure:
+        working_dir
+            |___annot
+            |___genes
+            |___graph
+            |___masks
+            |___sem_sim
     prefix
-        prefix for output files, e.g. the ontology used
+        prefix for output files, the used ontology should be specified here, for example
+        - if we use GO and our gene names are HGNC symbols, we can set the prefix to 'GO_symbol'
+        - if we use HPO, we can set the prefix to 'HPO'
     """
 
-    def __init__(self, obo, gene_annot, working_dir, prefix):
+    def __init__(self, working_dir, prefix):
         super(ontoobj, self).__init__()
 
-        self.dag = get_godag(obo, optional_attrs={'relationship'}, prt=None)
-        self.gene_annot = pd.read_csv(gene_annot, sep="\t", header=None)
-        self.gene_annot.columns = ['Gene', 'ID']
         self.working_dir = working_dir
         self.prefix = prefix
 
-    def dag_annot(self, **kwargs):
+    def dag_annot(self, dag, gene_annot, **kwargs):
 
         """
         This function takes in a dag object imported by goatools package and returns
@@ -62,28 +62,30 @@ class ontoobj():
         
         Parameters
         ----------
-        obo
-            Path to the obo file
+        dag
+            a dag parsed from an obo file
+        gene_annot
+            pandas dataframe containing gene -> term annotation
         **kwargs
             to pass if ids should be filtered, 
             {'id':'biological_process'}
         """
   
         # parse obo file and create list of term ids
-        term_ids = list(set([vars(self.dag[term_id])['id'] for term_id in list(self.dag.keys())]))
+        term_ids = list(set([vars(dag[term_id])['id'] for term_id in list(dag.keys())]))
 
         # if an id type was passed in kwargs, filter based on that
         if 'id' in kwargs.keys():
-            term_idx = [vars(self.dag[term_id])['namespace'] == kwargs['id'] for term_id in term_ids]
+            term_idx = [vars(dag[term_id])['namespace'] == kwargs['id'] for term_id in term_ids]
             valid_ids = [N for i,N in enumerate(term_ids) if term_idx[i] == True]
             term_ids = valid_ids
             self.gene_annot = self.gene_annot[self.gene_annot.ID.isin(term_ids)]
         
         # extract information for annot file
-        terms = [vars(self.dag[term_id])['name'] for term_id in term_ids]
-        depths = [vars(self.dag[term_id])['depth'] for term_id in term_ids]
-        num_children = [len(vars(self.dag[term_id])['children']) for term_id in term_ids]
-        num_parents = [len(vars(self.dag[term_id])['parents']) for term_id in term_ids]
+        terms = [vars(dag[term_id])['name'] for term_id in term_ids]
+        depths = [vars(dag[term_id])['depth'] for term_id in term_ids]
+        num_children = [len(vars(dag[term_id])['children']) for term_id in term_ids]
+        num_parents = [len(vars(dag[term_id])['parents']) for term_id in term_ids]
 
         # create annotation pandas dataframe
         annot = pd.DataFrame({'ID': term_ids,
@@ -95,7 +97,7 @@ class ontoobj():
         return annot
 
 
-    def create_dag_dict_files(self, **kwargs):
+    def create_dag_dict_files(self, obo, gene_annot, **kwargs):
 
         """
         This function creates the following files
@@ -117,12 +119,28 @@ class ontoobj():
         prefix_genes.txt in genes subfolder
             one-column text file containing the ontology genes alphabetically sorted
 
+        Parameters
+        -------------
+        obo
+            Path to the obo file
+        gene_annot
+            gene_annot
+            Path two a tab-separated 2-column text file
+            Gene1   Term1
+            Gene1   Term2
+            ...
+
         **kwargs
             to pass if ids should be filtered, 
             id = 'biological_process'
 
         Terms with 0 descendant genes are removed!
         """
+
+        # load obo file and gene -> term mapping file
+        dag = get_godag(obo, optional_attrs={'relationship'}, prt=None)
+        gene_annot = pd.read_csv(gene_annot, sep="\t", header=None)
+        gene_annot.columns = ['Gene', 'ID']
 
         # create saving subdirectories
         if not os.path.exists(self.working_dir + '/graph'):
@@ -134,15 +152,15 @@ class ontoobj():
 
         # create initial annot file
         if 'id' in kwargs.keys():
-            annot = self.dag_annot(id=kwargs['id'])
+            annot = self.dag_annot(dag, gene_annot, id=kwargs['id'])
         else:
-            annot = self.dag_annot()
+            annot = self.dag_annot(dag, gene_annot)
 
         # convert gene annot file to dictionary
         gene_term_dict = {a: b["ID"].tolist() for a,b in self.gene_annot.groupby("Gene")}
 
         # convert the dag to a dictionary
-        term_term_dict = {term_id: [x for x in vars(self.dag[term_id])['_parents'] if x in annot.ID.tolist()] for term_id in annot[annot.depth > 0].ID.tolist()}
+        term_term_dict = {term_id: [x for x in vars(dag[term_id])['_parents'] if x in annot.ID.tolist()] for term_id in annot[annot.depth > 0].ID.tolist()}
 
         # reverse the DAG to be able to count descendants and descendant genes
         gene_dict_rev = reverse_graph(gene_term_dict)
@@ -166,7 +184,7 @@ class ontoobj():
         annot_updated = annot_updated.sort_values(['depth', 'ID']).reset_index(drop=True)
 
         # update the dag dict using only the good IDs
-        term_dict = {term_id: [x for x in vars(self.dag[term_id])['_parents'] if x in annot_updated.ID.tolist()] for term_id in annot_updated[annot_updated.depth > 0].ID.tolist()}
+        term_dict = {term_id: [x for x in vars(dag[term_id])['_parents'] if x in annot_updated.ID.tolist()] for term_id in annot_updated[annot_updated.depth > 0].ID.tolist()}
         term_dict.update(gene_term_dict)
 
         # save the DAG dictionary as json file
@@ -190,7 +208,7 @@ class ontoobj():
         annot_updated['children'] = refined_children
 
         # recalculate number of descendants
-        term_dict = {term_id: [x for x in vars(self.dag[term_id])['_parents'] if x in annot_updated.ID.tolist()] for term_id in annot_updated[annot_updated.depth > 0].ID.tolist()}
+        term_dict = {term_id: [x for x in vars(dag[term_id])['_parents'] if x in annot_updated.ID.tolist()] for term_id in annot_updated[annot_updated.depth > 0].ID.tolist()}
         term_dict_rev = reverse_graph(term_dict)
         num_desc = []
         for term in annot_updated.ID.tolist():
@@ -414,7 +432,7 @@ class ontoobj():
         print('Decoder masks have been saved.')
 
 
-    def compute_wsem_sim(self, trimmed=True):
+    def compute_wsem_sim(self, obo, trimmed=True):
 
         """
         This function takes an obo file and an ontology annot file and returns
@@ -422,6 +440,8 @@ class ontoobj():
         
         Parameters
         ----------
+        obo
+            Path to the obo file
         trimmed
             if trimmed version of the dag should be used
             default: True 
@@ -441,6 +461,9 @@ class ontoobj():
             else:
                 sys.exit('annot file missing, create_dag_dict_files function needs to be run first!')
 
+        # parse the DAG
+        dag = get_godag(obo, optional_attrs={'relationship'}, prt=None)
+
         # create subdirectory
         if not os.path.exists(self.working_dir + '/sem_sim'):
             os.mkdir(self.working_dir + '/sem_sim')
@@ -450,7 +473,7 @@ class ontoobj():
         ids = onto_annot['ID'].tolist()
 
         # compute wang semantic similarities
-        wang = SsWang(ids, self.dag)
+        wang = SsWang(ids, dag)
         wsem_sim = [[wang.get_sim(id1, id2) for id2 in ids] for id1 in ids]
         wsem_sim = np.array(wsem_sim)
 
