@@ -5,6 +5,7 @@ import sys
 import pandas as pd
 import numpy as np
 import itertools
+import scanpy
 from goatools.base import get_godag
 from goatools.semsim.termwise.wang import SsWang
 import json
@@ -455,6 +456,59 @@ class ontoobj():
 
         np.save(self.working_dir + '/sem_sim/' + self.prefix + add_prefix + '_wsem_sim.npy', wsem_sim)
         print('Matrix with Wang Semantic Similarities has been saved.')
-    
+
+
+    def match_dataset(self, expr_path, name):
+
+        """
+        This function takes a dataset and matches the features to the features of the preprocessed ontology.
+        
+        Output
+        ----------
+        (name)_(prefix)_trimmed_expr.npy: a numpy 2D array containing the matched dataset
+
+        Parameters
+        ----------
+        expr_path: Path to the dataset to be matched, can be either:
+              - a h5ad file (extension .h5ad)
+              - a file with extension .csv (separated by ',') or with extension .txt (separated by '\t'), 
+                with features in rows and samples in columns
+        name: name to be used for saving the matched dataset
+        """
+
+        # check if ontology has been trimmed and import the genes file
+
+        if os.path.isfile(self.working_dir + '/genes/' + self.prefix + '_trimmed_genes.txt'):
+            onto_genes = pd.read_csv(self.working_dir + '/genes/' + self.prefix + '_trimmed_genes.txt', header=None)
+        else:
+            sys.exit('trimmed genes file missing, create_trim_dag_files function needs to be run first!')
+
+        # check file extension of dataset to be matched
+
+        basename = os.path.basename(expr_path)
+        ext = basename.split('.')[1]
+
+        if ext == 'csv':
+            expr = pd.read_csv(expr_path, sep=",", index_col=0)
+        elif ext == 'txt':
+            expr = pd.read_csv(expr_path, sep="\t", index_col=0)
+        elif ext == 'h5ad':
+            # read in with scanpy
+            data = scanpy.read_h5ad(expr_path)
+            sample_annot = data.obs
+            genes = data.var.gene_symbol.reset_index(drop=True)
+            expr = data.X.todense()
+            # convert to pandas dataframe
+            expr = pd.DataFrame(expr.T)
+            expr.index = genes
+            expr.columns = sample_annot.index
+        else:
+            sys.exit('File extension not supported.')
+
+        # merge data with ontology genes and save
+        onto_genes.index = onto_genes.iloc[:,0]
+        merged_expr = onto_genes.join(expr).fillna(0).drop(0, axis=1).T
+        np.save(os.path.dirname(expr_path) + '/' + name + '_' + self.prefix + '_trimmed_expr.npy', merged_expr.to_numpy())
+        
 
 
