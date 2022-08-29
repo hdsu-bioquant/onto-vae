@@ -246,6 +246,54 @@ class OntoVAE(nn.Module):
             print(f"Val Loss: {val_epoch_loss:.4f}")
 
 
+    def get_pathway_activities(self, data):
+        """
+        Parameters
+        -------------
+        2D numpy array to be run through trained model
+        """
+
+        # convert data to tensor and move to device
+        data = torch.tensor(data, dtype=torch.float32).to(self.device)
+
+        # set to eval mode
+        self.eval()
+
+        # get latent space embedding
+        with torch.no_grad():
+            z = self.get_embedding(data)
+            z = z.to('cpu').detach().numpy()
+        
+        z = np.array(np.split(z, z.shape[1]/self.neuronnum, axis=1)).mean(axis=2).T
+
+        # get activities from decoder
+        activation = {}
+        def get_activation(index):
+            def hook(model, input, output):
+                activation[index] = output.to('cpu').detach()
+            return hook
+
+        hooks = {}
+
+        for i in range(len(self.decoder.decoder)-1):
+            key = 'Dec' + str(i)
+            value = self.decoder.decoder[i][0].register_forward_hook(get_activation(i))
+            hooks[key] = value
+        
+        with torch.no_grad():
+            reconstruction, _, _ = self.forward(data)
+
+        act = torch.cat(list(activation.values()), dim=1).detach().numpy()
+        act = np.array(np.split(act, act.shape[1]/self.neuronnum, axis=1)).mean(axis=2).T
+
+        # stack and return
+        return np.hstack((z,act))
+
+        
+
+
+
+
 
 
 
