@@ -101,3 +101,12 @@ hpo_model.load_state_dict(checkpoint['model_state_dict'])
 hpo_act = hpo_model.get_pathway_activities(ontobj=hpo,
                                            dataset='Kang_PBMC')
 ```
+
+If we want to perform an in silico perturbation before passing our data and retrieving the pathway activities, we can do it as follows:
+
+```
+hpo_ko_act = hpo_model.perturbation(ontobj=hpo,
+                                    datasets='Kang_PBMC',
+                                    genes=['ISG15'],        # list of genes to be perturbed
+                                    values=[0])             # list of new values for the genes
+```
