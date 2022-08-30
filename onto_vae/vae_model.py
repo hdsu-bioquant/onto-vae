@@ -235,21 +235,8 @@ class OntoVAE(nn.Module):
             print(f"Val Loss: {val_epoch_loss:.4f}")
 
 
-    def get_pathway_activities(self, ontobj, dataset):
-        """
-        Parameters
-        -------------
-        ontobj: instance of the class Ontobj(), should be the same as the one used for model training
-        dataset: which dataset to use for pathway activity retrieval
-        """
-        if self.ontology != ontobj.description:
-            sys.exit('Wrong ontology provided, should be ' + self.ontology)
-
-        data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset]
-
-        # convert data to tensor and move to device
-        data = torch.tensor(data, dtype=torch.float32).to(self.device)
-
+    def _pass_data(self, data):
+        
         # set to eval mode
         self.eval()
 
@@ -283,7 +270,61 @@ class OntoVAE(nn.Module):
         # stack and return
         return np.hstack((z,act))
 
+
+    def get_pathway_activities(self, ontobj, dataset):
+        """
+        Parameters
+        -------------
+        ontobj: instance of the class Ontobj(), should be the same as the one used for model training
+        dataset: which dataset to use for pathway activity retrieval
+        """
+        if self.ontology != ontobj.description:
+            sys.exit('Wrong ontology provided, should be ' + self.ontology)
+
+        data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset]
+
+        # convert data to tensor and move to device
+        data = torch.tensor(data, dtype=torch.float32).to(self.device)
+
+        # retireve pathway activities
+        act = self._pass_data(data)
+        return act
+
+
         
+    def perturbation(self, ontobj, dataset, genes, values):
+        """
+        This function retrieves pathway activities after performing in silico perturbation
+
+        Parameters
+        -------------
+        ontobj: instance of the class Ontobj(), should be the same as the one used for model training
+        dataset: which dataset to use for perturbation and pathway activity retrieval
+        genes: a list of genes to perturb
+        values: list with new values, same length as genes
+        """
+
+        if self.ontology != ontobj.description:
+            sys.exit('Wrong ontology provided, should be ' + self.ontology)
+
+        data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset]
+
+        # get indices of the genes in list
+        indices = [self.genes.index(g) for g in genes]
+
+        # replace their values
+        for i in range(len(genes)):
+            data[:,indices[i]] = values[i]
+
+        # convert data to tensor and move to device
+        data = torch.tensor(data, dtype=torch.float32).to(self.device)
+        
+        # get pathway activities after perturbation
+        act = self._pass_data(data)
+        return act
+        
+
+
 
 
 
