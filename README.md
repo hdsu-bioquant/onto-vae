@@ -4,7 +4,7 @@ This allows direct retrieval of pathway activities from the model.
 OntoVAE can also be used to simulate genetic or drug induced perturbations, as demonstrated in our manuscript 
 'Biologically informed variational autoencoders allow predictive modeling of genetic and drug induced perturbations'.
 
-Mainly, the workflow for training OntoVAE models consists of two steps.
+Mainly, the workflow for training OntoVAE models consists of three steps.
 
 ## 1. Creation of an ontology object
 
@@ -93,7 +93,12 @@ hpo_model.train_model(modelpath='/path/to/models/best_model.py',     # where to 
                      epochs=300,                                     # over how many epochs to train
                      log=False)                                      # if the run should be logged to Neptune
 ```
-After training, we can load the best model to retrieve pathway activities.
+
+
+## 3. Analysis with OntoVAE model (pathway activities + perturbations)
+
+Now that our model is trained, we can do some analysis with it, such as retrieval of pathway activities.
+
 ```
 checkpoint = torch.load('/path/to/models/best_model.py')
 hpo_model.load_state_dict(checkpoint['model_state_dict'])
