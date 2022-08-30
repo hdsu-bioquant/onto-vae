@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-# Class for OntoVAE
-
+import sys
 import numpy as np
 import torch
 from torch import optim
@@ -10,7 +9,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from .modules import Encoder, Decoder, OntoEncoder, OntoDecoder
-
+from .fast_data_loader import FastTensorDataLoader
 
 ###-------------------------------------------------------------###
 ##                  VAE WITH ONTOLOGY IN DECODER                 ##
@@ -22,22 +21,30 @@ class OntoVAE(nn.Module):
 
     Parameters
     -------------
-    in_features: # of features that are used as input
-    masks: path to binary mask list as created by ontoobj()
+    ontobj: instance of the class Ontobj(), containing a preprocessed ontology and the training data
+    dataset: which dataset to use for training
+    top_thresh: top threshold to tell which trimmed ontology to use
+    bottom_thresh: bottom_threshold to tell which trimmed ontology to use
     neuronnum: number of neurons per term
-    drop: dropout rate, default is 0
+    drop: dropout rate, default is 0.2
     z_drop: dropout rate for latent space, default is 0.5
     """
 
-    def __init__(self, in_features, masks, neuronnum=1, drop=0, z_drop=0.5):
+    def __init__(self, ontobj, dataset, top_thresh=1000, bottom_thresh=30, neuronnum=3, drop=0.2, z_drop=0.5):
         super(OntoVAE, self).__init__()
 
-        self.in_features = in_features
-        with open(masks, 'rb') as f:
-            mask_list = pickle.load(f)
-        self.mask_list = [torch.tensor(m, dtype=torch.float32) for m in mask_list]
+        if not str(top_thresh) + '_' + str(bottom_thresh) in ontobj.genes.keys():
+            sys.exit('Available trimming thresholds are: ' + ', '.join(list(ontobj.genes.keys())))
+
+        self.ontology = ontobj.description
+        self.top = top_thresh
+        self.bottom = bottom_thresh
+        self.genes = ontobj.genes[str(top_thresh) + '_' + str(bottom_thresh)]
+        self.in_features = len(self.genes)
+        self.mask_list = ontobj.masks[str(top_thresh) + '_' + str(bottom_thresh)]
+        self.mask_list = [torch.tensor(m, dtype=torch.float32) for m in self.mask_list]
         self.layer_dims_dec =  np.array([self.mask_list[0].shape[1]] + [m.shape[0] for m in self.mask_list])
-        self.latent_dim = layer_dims_dec[0] * neuronnum
+        self.latent_dim = self.layer_dims_dec[0] * neuronnum
         self.layer_dims_enc = [self.latent_dim]
         self.neuronnum = neuronnum
         self.drop = drop
@@ -59,6 +66,11 @@ class OntoVAE(nn.Module):
                                     self.neuronnum,
                                     self.drop)
         
+        if not dataset in ontobj.data[str(top_thresh) + '_' + str(bottom_thresh)].keys():
+            sys.exit('Available datasets are: ' + ', '.join(list(ontobj.data[str(top_thresh) + '_' + str(bottom_thresh)].keys())))
+
+        self.X = ontobj.data[str(top_thresh) + '_' + str(bottom_thresh)][dataset]
+
     def reparameterize(self, mu, log_var):
         """
         Parameters
@@ -166,19 +178,36 @@ class OntoVAE(nn.Module):
         val_loss = running_loss/len(dataloader)
         return val_loss
 
-    def train_model(self, trainloader, valloader, lr, kl_coeff, epochs, modelpath, log=True, **kwargs):
+    def train_model(self, modelpath, lr=1e-4, kl_coeff=1e-4, batch_size=128, epochs=300, log=True, **kwargs):
         """
         Parameters
         -------------
-        trainloader: pytorch dataloader instance with training data
-        valloader: pytorch dataloader instance with validation data
+        modelpath: where to store the best model (full path with filename)
         lr: learning rate
-        kl_coeff: coefficient for weighting Kullback-Leibler loss
-        epochs: number of epochs to train the model
-        modelpath: where to store the best model
-        log: if losses should be logged
+        kl_coeff: Kullback Leibler loss coefficient
+        batch_size: size of minibatches
+        epochs: over how many epochs to train
+        log: whether run should be logged to neptune
         **kwargs: pass the run here if log == True
         """
+        # train-test split
+        indices = np.random.RandomState(seed=42).permutation(self.X.shape[0])
+        X_train_ind = indices[:round(len(indices)*0.8)]
+        X_val_ind = indices[round(len(indices)*0.8):]
+        X_train, X_val = self.X[X_train_ind,:], self.X[X_val_ind,:]
+
+        # convert train and val into torch tensors
+        X_train = torch.tensor(X_train, dtype=torch.float32)
+        X_val = torch.tensor(X_val, dtype=torch.float32)
+
+        # generate dataloaders
+        trainloader = FastTensorDataLoader(X_train, 
+                                       batch_size=batch_size, 
+                                       shuffle=True)
+        valloader = FastTensorDataLoader(X_val, 
+                                        batch_size=batch_size, 
+                                        shuffle=False)
+
         val_loss_min = float('inf')
         optimizer = optim.AdamW(self.parameters(), lr = lr)
 
@@ -206,12 +235,17 @@ class OntoVAE(nn.Module):
             print(f"Val Loss: {val_epoch_loss:.4f}")
 
 
-    def get_pathway_activities(self, data):
+    def get_pathway_activities(self, ontobj, dataset):
         """
         Parameters
         -------------
-        2D numpy array to be run through trained model
+        ontobj: instance of the class Ontobj(), should be the same as the one used for model training
+        dataset: which dataset to use for pathway activity retrieval
         """
+        if self.ontology != ontobj.description:
+            sys.exit('Wrong ontology provided, should be ' + self.ontology)
+
+        data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset]
 
         # convert data to tensor and move to device
         data = torch.tensor(data, dtype=torch.float32).to(self.device)
@@ -236,7 +270,7 @@ class OntoVAE(nn.Module):
         hooks = {}
 
         for i in range(len(self.decoder.decoder)-1):
-            key = 'Dec' + str(i)
+            key = str(i)
             value = self.decoder.decoder[i][0].register_forward_hook(get_activation(i))
             hooks[key] = value
         
