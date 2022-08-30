@@ -393,14 +393,15 @@ class Ontobj():
 
 
 
-    def match_dataset(self, expr_path, name, top_thresh=1000, bottom_thresh=30):
+    def match_dataset(self, expr_data, name, top_thresh=1000, bottom_thresh=30):
 
         """
         This function takes a dataset, matches the features to the features of the preprocessed ontology and stores it in the data slot
 
         Parameters
         ----------
-        expr_path: Path to the dataset to be matched, can be either:
+        expr_data: a Pandas dataframe with gene names in index and samples names in columns OR 
+        Path to the dataset to be matched, can be either:
               - a h5ad file (extension .h5ad)
               - a file with extension .csv (separated by ',') or with extension .txt (separated by '\t'), 
                 with features in rows and samples in columns
@@ -424,27 +425,29 @@ class Ontobj():
             genes = pd.DataFrame(self.genes[str(top_thresh) + '_' + str(bottom_thresh)])
 
         # check file extension of dataset to be matched
-
-        basename = os.path.basename(expr_path)
-        ext = basename.split('.')[1]
-
-        if ext == 'csv':
-            expr = pd.read_csv(expr_path, sep=",", index_col=0)
-        elif ext == 'txt':
-            expr = pd.read_csv(expr_path, sep="\t", index_col=0)
-        elif ext == 'h5ad':
-            # read in with scanpy
-            with contextlib.redirect_stdout(io.StringIO()):
-                data = scanpy.read_h5ad(expr_path)
-            sample_annot = data.obs
-            sample_genes = data.var.gene_symbol.reset_index(drop=True)
-            expr = data.X.todense()
-            # convert to pandas dataframe
-            expr = pd.DataFrame(expr.T)
-            expr.index = sample_genes
-            expr.columns = sample_annot.index
+        if expr_data != pd.DataFrame():
+            expr = expr_data
         else:
-            sys.exit('File extension not supported.')
+            basename = os.path.basename(expr_data)
+            ext = basename.split('.')[1]
+
+            if ext == 'csv':
+                expr = pd.read_csv(expr_data, sep=",", index_col=0)
+            elif ext == 'txt':
+                expr = pd.read_csv(expr_data, sep="\t", index_col=0)
+            elif ext == 'h5ad':
+                # read in with scanpy
+                with contextlib.redirect_stdout(io.StringIO()):
+                    data = scanpy.read_h5ad(expr_data)
+                sample_annot = data.obs
+                sample_genes = data.var.gene_symbol.reset_index(drop=True)
+                expr = data.X.todense()
+                # convert to pandas dataframe
+                expr = pd.DataFrame(expr.T)
+                expr.index = sample_genes
+                expr.columns = sample_annot.index
+            else:
+                sys.exit('File extension not supported.')
 
         # merge data with ontology genes and save
         genes.index = genes.iloc[:,0]
