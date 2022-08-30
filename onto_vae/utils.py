@@ -149,7 +149,7 @@ def trim_DAG_bottom(DAG, all_terms, trim_terms):
     term_dict: the trimmed DAG
     """
 
-    # separate dict for PWO terms only
+    # separate dict for terms only
     term_term_dict = {key: DAG[key] for key in list(DAG.keys()) if key in all_terms}
 
     # separate dict for genes only
@@ -221,9 +221,6 @@ def trim_DAG_top(DAG, all_terms, trim_terms):
     term_dict.update(gene_dict)
 
     return term_dict
-
-
-
 
 
 
