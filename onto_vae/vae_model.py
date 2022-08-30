@@ -292,7 +292,7 @@ class OntoVAE(nn.Module):
 
 
         
-    def perturbation(self, ontobj, dataset, genes, values):
+    def perturbation(self, ontobj, dataset, genes, values, **kwargs):
         """
         This function retrieves pathway activities after performing in silico perturbation
 
@@ -302,6 +302,9 @@ class OntoVAE(nn.Module):
         dataset: which dataset to use for perturbation and pathway activity retrieval
         genes: a list of genes to perturb
         values: list with new values, same length as genes
+
+        **kwargs
+        terms: if we only want to get back the activities for certain terms (should be list of ids)
         """
 
         if self.ontology != ontobj.description:
@@ -318,9 +321,19 @@ class OntoVAE(nn.Module):
 
         # convert data to tensor and move to device
         data = torch.tensor(data, dtype=torch.float32).to(self.device)
-        
+
         # get pathway activities after perturbation
         act = self._pass_data(data)
+        
+        # if term was specified, subset
+        if 'terms' in kwargs:
+            terms = kwargs.get('terms')
+
+            annot = ontobj.annot[str(self.top) + '_' + str(self.bottom)]
+            term_ind = annot[annot.ID.isin(terms)].index.to_numpy()
+
+            act = act[:, term_ind]
+
         return act
         
 
