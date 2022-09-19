@@ -170,12 +170,13 @@ class OntoEncoder(nn.Module):
     def __init__(self, in_features, layer_dims, mask_list, drop=0, z_drop=0.5):
         super(OntoEncoder, self).__init__()
 
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.in_features = in_features
         self.layer_dims = layer_dims
         self.layer_shapes = [(np.sum(self.layer_dims[:i+1]), self.layer_dims[i+1]) for i in range(len(self.layer_dims)-1)]
         self.masks = []
         for m in mask_list:
-            self.masks.append(m.cuda(0))
+            self.masks.append(m.to(self.device))
         self.latent_dim = self.layer_dims[-1]
         self.drop = drop
         self.z_drop = z_drop
@@ -185,17 +186,17 @@ class OntoEncoder(nn.Module):
 
             [self.build_block(x[0], x[1]) for x in self.layer_shapes[:-1]] 
 
-        ).cuda(0)
+        ).to(self.device)
 
         self.mu = nn.Sequential(
             nn.Linear(self.layer_shapes[-1][0], self.latent_dim),
             nn.Dropout(p=self.z_drop)
-        ).cuda(0)
+        ).to(self.device)
 
         self.logvar = nn.Sequential(
             nn.Linear(self.layer_shapes[-1][0], self.latent_dim),
             nn.Dropout(p=self.z_drop)
-        ).cuda(0)
+        ).to(self.device)
 
         # apply masks to zero out weights of non-existing connections
         for i in range(len(self.encoder)):
@@ -257,6 +258,7 @@ class OntoDecoder(nn.Module):
     def __init__(self, in_features, layer_dims, mask_list, latent_dim, neuronnum=1, drop=0):
         super(OntoDecoder, self).__init__()
 
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.in_features = in_features
         self.layer_dims = np.hstack([layer_dims[:-1] * neuronnum, layer_dims[-1]])
         self.layer_shapes = [(np.sum(self.layer_dims[:i+1]), self.layer_dims[i+1]) for i in range(len(self.layer_dims)-1)]
@@ -264,8 +266,8 @@ class OntoDecoder(nn.Module):
         for m in mask_list[0:-1]:
             m = m.repeat_interleave(neuronnum, dim=0)
             m = m.repeat_interleave(neuronnum, dim=1)
-            self.masks.append(m.cuda(0))
-        self.masks.append(mask_list[-1].repeat_interleave(neuronnum, dim=1).cuda(0))
+            self.masks.append(m.to(self.device))
+        self.masks.append(mask_list[-1].repeat_interleave(neuronnum, dim=1).to(self.device))
         self.latent_dim = latent_dim
         self.drop = drop
 
@@ -280,7 +282,7 @@ class OntoDecoder(nn.Module):
                     #nn.Sigmoid()
                 )
             ]
-            ).cuda(0)
+            ).to(self.device)
         
         # apply masks to zero out weights of non-existent connections
         for i in range(len(self.decoder)):
