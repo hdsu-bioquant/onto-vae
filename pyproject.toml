@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "onto-vae"
+version = "0.1.0"
+description = "Package to preprocess ontologies, train OntoVAE models and obtain pathway activities."
+authors = ["daria-dc <daria.doncevic@gmail.com>"]
+license = "GPLv3"
+readme = "README.md"
+packages = [{include = "onto_vae"}]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+pandas = ">=1.1.0"
+scanpy = ">=1.8.0"
+goatools = ">=1.0.15"
+torch = ">=1.10.0"
+tqdm = ">=4.60.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
