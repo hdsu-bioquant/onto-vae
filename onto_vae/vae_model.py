@@ -332,6 +332,8 @@ class OntoVAE(nn.Module):
 ##               VAE WITH ONTOLOGY IN ENCODER                    ##
 ###-------------------------------------------------------------###
 
+# This class has not been updated yet to work with an Ontoobj, so use carefully.
+
 class OntoEncVAE(nn.Module):
     """
     This class combines a an ontology structured encoder with a normal decoder
@@ -576,15 +578,13 @@ class OntoEncVAE(nn.Module):
 
 class VAE(nn.Module):
     """
-    This class combines a normal encoder with an ontology structured decoder
+    This class defines a standard VAE without ontology.
 
     Parameters
     -------------
     in_features: # of features that are used as input
-    onto: 'encoder' or 'decoder', indicating which takes ontology structure
+    layer_dims_enc: list giving the dimensions of the layers in the encoder
     layer_dims_dec: list giving the dimensions of the layers in the decoder
-    mask_list: matrix for each layer transition, that determines which weights to zero out
-    neuronnum: number of neurons per term
     drop: dropout rate, default is 0
     z_drop: dropout rate for latent space, default is 0.5
     """
