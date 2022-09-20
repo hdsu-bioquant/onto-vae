@@ -425,7 +425,7 @@ class Ontobj():
             genes = pd.DataFrame(self.genes[str(top_thresh) + '_' + str(bottom_thresh)])
 
         # check file extension of dataset to be matched
-        if expr_data != pd.DataFrame():
+        if isinstance(expr_data, pd.DataFrame):
             expr = expr_data
         else:
             basename = os.path.basename(expr_data)
