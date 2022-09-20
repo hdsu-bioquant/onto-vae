@@ -10,6 +10,11 @@ from goatools.base import get_godag
 from goatools.semsim.termwise.wang import SsWang
 import json
 import pickle
+import matplotlib.pyplot as plt 
+import seaborn as sns
+import colorcet as cc
+from scipy import stats
+from statsmodels.stats.multitest import fdrcorrection
 from onto_vae.utils import *
 
 
@@ -457,4 +462,108 @@ class Ontobj():
             self.data[str(top_thresh) + '_' + str(bottom_thresh)] = {}
 
         self.data[str(top_thresh) + '_' + str(bottom_thresh)][name] = merged_expr.to_numpy()
-        
+
+    
+    def extract_annot(self, top_thresh=1000, bottom_thresh=30):
+        return self.annot[str(top_thresh) + '_' + str(bottom_thresh)]
+
+
+    def plot_scatter(self, sample_annot, color_by, act, term1, term2, top_thresh=1000, bottom_thresh=30):
+        """ 
+        This function is used to make a scatterplot of two pathway activities
+
+        Parameters
+        ----------
+        sample_annot
+            a Pandas dataframe with gene names in index and samples names in columns OR 
+            a file with extension .csv (separated by ',') or with extension .txt (separated by '\t'), 
+            with features in rows and samples in columns
+        color_by
+            the column of sample_annot to use for coloring
+        act
+            numpy array containing pathway activities
+        term1
+            ontology term on x-axis
+        term2
+            ontology term on y-axis
+        top_thresh
+            top threshold for trimming
+        bottom_thresh
+            bottom_threshold for trimming
+        """
+        # import sample annotation
+        if isinstance(sample_annot, pd.DataFrame):
+            sample_annot = sample_annot
+        else:
+            basename = os.path.basename(sample_annot)
+            ext = basename.split('.')[1]
+
+            if ext == 'csv':
+                sample_annot = pd.read_csv(sample_annot, sep=",", index_col=0)
+            elif ext == 'txt':
+                sample_annot = pd.read_csv(sample_annot, sep="\t", index_col=0)
+
+        # create color dict
+        categs = sample_annot.loc[:,color_by].unique().tolist()
+        palette = sns.color_palette(cc.glasbey, n_colors=len(categs))
+        color_dict = dict(zip(categs, palette))
+
+        # extract ontology annot and get term indices
+        onto_annot = self.extract_annot(top_thresh=top_thresh, bottom_thresh=bottom_thresh)
+        ind1 = onto_annot[onto_annot.Name == term1].index.to_numpy()
+        ind2 = onto_annot[onto_annot.Name == term2].index.to_numpy()
+
+        # make scatterplot
+        fig, ax = plt.subplots(figsize=(10,7))
+        sns.scatterplot(x=act[:,ind1].flatten(),
+                        y=act[:,ind2].flatten(),
+                        hue=sample_annot.loc[:,color_by],
+                        palette=color_dict,
+                        legend='full',
+                        s=8,
+                        rasterized=True)
+        plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+        plt.xlabel(term1)
+        plt.ylabel(term2)
+        plt.tight_layout()
+
+    
+    def wilcox_test(self, dataset, act, perturbed_act, direction='up', top_thresh=1000, bottom_thresh=30):
+        """ 
+        Function to perform paired Wilcoxon test between activities and perturbed activities
+
+        Parameters
+        ----------
+        dataset
+            the dataset that the activities were computed on
+        act
+            numpy 2D array of pathway activities 
+        perturbed_act
+            numpy 2D array of perturbed pathway activities
+        direction
+            up: higher in perturbed
+            down: lower in perturbed
+        top_thresh
+            top threshold for trimming
+        bottom_thresh
+            bottom_threshold for trimming
+        """
+        # perform paired wilcoxon test over all terms
+        alternative = 'greater' if direction == 'up' else 'less'
+        wilcox = [stats.wilcoxon(perturbed_act[:,i], act[:,i], zero_method='zsplit', alternative=alternative) for i in range(act.shape[1])]
+        stat = np.array([i[0] for i in wilcox])
+        pvals = np.array([i[1] for i in wilcox])
+        qvals = fdrcorrection(np.array(pvals))
+
+        # extract ontology annot
+        onto_annot = self.extract_annot(top_thresh=top_thresh, bottom_thresh=bottom_thresh)
+
+        # create results dataframe and sort by pval
+        res = pd.DataFrame({'id': onto_annot.ID.tolist(),
+                            'term': onto_annot.Name.tolist(),
+                            'depth': onto_annot.depth.tolist(),
+                            'stat': stat,
+                            'pval' : pvals,
+                            'qval': qvals[1]})
+        res = res.sort_values('pval')
+        return(res)
