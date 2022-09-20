@@ -3,3 +3,4 @@ scanpy>=1.8.0
 goatools>=1.0.15
 torch>=1.10.0
 tqdm>=4.60.0
+colorcet>=3.0.0
