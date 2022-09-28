@@ -5,7 +5,6 @@ import sys
 import pandas as pd
 import numpy as np
 import itertools
-import scanpy
 from goatools.base import get_godag
 from goatools.semsim.termwise.wang import SsWang
 import json
@@ -405,12 +404,13 @@ class Ontobj():
 
         Parameters
         ----------
-        expr_data: a Pandas dataframe with gene names in index and samples names in columns OR 
-        Path to the dataset to be matched, can be either:
-              - a h5ad file (extension .h5ad)
-              - a file with extension .csv (separated by ',') or with extension .txt (separated by '\t'), 
+        expr_data
+            a Pandas dataframe with gene names in index and samples names in columns OR 
+            Path to the dataset to be matched, can be either:
+              - a file with extension .csv (separated by ',')
+              - a file with extension .txt (separated by '\t'), 
                 with features in rows and samples in columns
-            The dataset should not have duplicated genenames
+             The dataset should not have duplicated genenames!
 
         top_thresh
             top threshold for trimming
@@ -419,7 +419,8 @@ class Ontobj():
         
         The parameters tell the function which trimmed version to use.
 
-        name: name to be used for identifying the matched dataset
+        name
+            name to be used for identifying the matched dataset
         """
 
         # check if ontology has been trimmed and import the genes file
@@ -440,17 +441,6 @@ class Ontobj():
                 expr = pd.read_csv(expr_data, sep=",", index_col=0)
             elif ext == 'txt':
                 expr = pd.read_csv(expr_data, sep="\t", index_col=0)
-            elif ext == 'h5ad':
-                # read in with scanpy
-                with contextlib.redirect_stdout(io.StringIO()):
-                    data = scanpy.read_h5ad(expr_data)
-                sample_annot = data.obs
-                sample_genes = data.var.gene_symbol.reset_index(drop=True)
-                expr = data.X.todense()
-                # convert to pandas dataframe
-                expr = pd.DataFrame(expr.T)
-                expr.index = sample_genes
-                expr.columns = sample_annot.index
             else:
                 sys.exit('File extension not supported.')
 
