@@ -24,6 +24,7 @@ def reverse_graph(graph):
 ###--------------------------------------
 
 # function to iterate over DAG for a given term and get all children and children's children
+# this function has to be run with a reversed DAG, with mapping parents -> children, not containing gene annot
 def get_descendants(dag, term):
 
     descendants = []
@@ -43,7 +44,8 @@ def get_descendants(dag, term):
 
     return descendants
 
-# function to, given a list of terms, get the number of genes associated to all of them
+# function to, given a list of descendant terms, get all genes associated to them
+# the function has to be run with reversed gene annot dict, with mapping terms -> annotated genes
 def get_descendant_genes(dag, descendants):
 
     desc_dict = {key: dag[key] for key in list(dag.keys()) if key in descendants}
@@ -226,7 +228,7 @@ def trim_DAG_top(DAG, all_terms, trim_terms):
 
 
 # recursive path-finding function (https://www.python-kurs.eu/hanser-blog/examples/graph2.py)
-
+# in the dict: from key to value, eg. in dag, from child -> parent
 def find_all_paths(graph, start, end, path=[]):
     path = path + [start]
     if start == end:
