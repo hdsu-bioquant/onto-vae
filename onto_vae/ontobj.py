@@ -457,6 +457,11 @@ class Ontobj():
     def extract_annot(self, top_thresh=1000, bottom_thresh=30):
         return self.annot[str(top_thresh) + '_' + str(bottom_thresh)]
 
+    def extract_genes(self, top_thresh=1000, bottom_thresh=30):
+        return self.genes[str(top_thresh) + '_' + str(bottom_thresh)]
+
+    def extract_dataset(self, dataset, top_thresh=1000, bottom_thresh=30)
+        return self.data[str(top_thresh) + '_' + str(bottom_thresh)][dataset]
 
     def plot_scatter(self, sample_annot, color_by, act, term1, term2, top_thresh=1000, bottom_thresh=30):
         """ 
