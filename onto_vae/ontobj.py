@@ -460,8 +460,43 @@ class Ontobj():
     def extract_genes(self, top_thresh=1000, bottom_thresh=30):
         return self.genes[str(top_thresh) + '_' + str(bottom_thresh)]
 
-    def extract_dataset(self, dataset, top_thresh=1000, bottom_thresh=30)
+    def extract_dataset(self, dataset, top_thresh=1000, bottom_thresh=30):
         return self.data[str(top_thresh) + '_' + str(bottom_thresh)][dataset]
+
+
+    def remove_link(self, term, gene, top_thresh=1000, bottom_thresh=30):
+        """
+        This function removes the link between a gene and a term in the masks slot.
+        You will modify the masks! So better do not save the ontobj after that, but just
+        remove the link before training a model
+
+        Parameters
+        ----------
+        term
+            id of the term
+        gene
+            the gene
+        top_thresh
+            top threshold for trimming
+        bottom_thresh
+            bottom_threshold for trimming
+        """
+        onto_annot = self.extract_annot(top_thresh=top_thresh,
+                                        bottom_thresh=bottom_thresh)
+        genes = self.extract_genes(top_thresh=top_thresh,
+                                        bottom_thresh=bottom_thresh)
+
+        # retrieve indices to remove link
+        # for the term, we need to work around, as terms in masks are sorted reversed (Depth 15 -> Depth 14 -> Depth 13 ...)
+        term_depth = onto_annot[onto_annot.ID == term].depth.to_numpy()[0]
+        depth_counts = onto_annot.depth.value_counts().sort_index(ascending=False)
+        start_point = depth_counts[depth_counts.index > term_depth].sum()
+        annot_sub = onto_annot[onto_annot.depth == term_depth]
+        term_idx = annot_sub[annot_sub.ID == term].index.to_numpy()
+        gene_idx = genes.index(gene)
+
+        self.masks[str(top_thresh) + '_' + str(bottom_thresh)][-1][gene_idx, start_point + term_idx] = 0
+
 
     def plot_scatter(self, sample_annot, color_by, act, term1, term2, top_thresh=1000, bottom_thresh=30):
         """ 
