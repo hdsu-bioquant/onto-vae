@@ -235,8 +235,13 @@ class OntoVAE(nn.Module):
             print(f"Val Loss: {val_epoch_loss:.4f}")
 
 
-    def _pass_data(self, data):
-        
+    def _pass_data(self, data, output):
+        """
+        output
+            one of 'act': pathway activities
+                    'rec': reconstructed values
+        """
+
         # set to eval mode
         self.eval()
 
@@ -267,16 +272,21 @@ class OntoVAE(nn.Module):
         act = torch.cat(list(activation.values()), dim=1).detach().numpy()
         act = np.array(np.split(act, act.shape[1]/self.neuronnum, axis=1)).mean(axis=2).T
 
-        # stack and return
-        return np.hstack((z,act))
+        # return pathway activities or reconstructed gene values
+        if output == 'act':
+            return np.hstack((z,act))
+        if output == 'rec':
+            return reconstruction.to('cpu').detach().numpy()
 
 
-    def get_pathway_activities(self, ontobj, dataset):
+    def get_pathway_activities(self, ontobj, dataset, **kwargs):
         """
         Parameters
         -------------
         ontobj: instance of the class Ontobj(), should be the same as the one used for model training
         dataset: which dataset to use for pathway activity retrieval
+        **kwargs
+        terms: if we only want to get back the activities for certain terms (should be list of ids)
         """
         if self.ontology != ontobj.description:
             sys.exit('Wrong ontology provided, should be ' + self.ontology)
@@ -287,12 +297,52 @@ class OntoVAE(nn.Module):
         data = torch.tensor(data, dtype=torch.float32).to(self.device)
 
         # retireve pathway activities
-        act = self._pass_data(data)
+        act = self._pass_data(data, 'act')
+
+        # if term was specified, subset
+        if 'terms' in kwargs:
+            terms = kwargs.get('terms')
+            annot = ontobj.annot[str(self.top) + '_' + str(self.bottom)]
+            term_ind = annot[annot.ID.isin(terms)].index.to_numpy()
+
+            act = act[:,term_ind]
+
         return act
 
 
+    def get_reconstructed_values(self, ontobj, dataset, **kwargs):
+        """
+        Parameters
+        -------------
+        ontobj: instance of the class Ontobj(), should be the same as the one used for model training
+        dataset: which dataset to use for pathway activity retrieval
+
+        **kwargs
+        genes: if we only want to get back values for certain genes
+        """
+        if self.ontology != ontobj.description:
+            sys.exit('Wrong ontology provided, should be ' + self.ontology)
+
+        data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset]
+
+        # convert data to tensor and move to device
+        data = torch.tensor(data, dtype=torch.float32).to(self.device)
+
+        # retireve pathway activities
+        rec = self._pass_data(data, 'rec')
+
+        # if genes were passed, subset
+        if 'genes' in kwargs:
+            genes = kwargs.get('genes')
+            onto_genes = ontobj.genes[str(self.top) + '_' + str(self.bottom)]
+            gene_ind = np.array([onto_genes.index(g) for g in genes])
+
+            rec = rec[:,gene_ind]
+
+        return rec
+
         
-    def perturbation(self, ontobj, dataset, genes, values, **kwargs):
+    def perturbation(self, ontobj, dataset, genes, values, output='terms', **kwargs):
         """
         This function retrieves pathway activities after performing in silico perturbation
 
@@ -302,9 +352,11 @@ class OntoVAE(nn.Module):
         dataset: which dataset to use for perturbation and pathway activity retrieval
         genes: a list of genes to perturb
         values: list with new values, same length as genes
+        output: 'terms' or 'genes'
 
         **kwargs
         terms: if we only want to get back the activities for certain terms (should be list of ids)
+        genes: if we only want to get back values for certain genes
         """
 
         if self.ontology != ontobj.description:
@@ -322,19 +374,28 @@ class OntoVAE(nn.Module):
         # convert data to tensor and move to device
         data = torch.tensor(data, dtype=torch.float32).to(self.device)
 
-        # get pathway activities after perturbation
-        act = self._pass_data(data)
-        
+        # get pathway activities or reconstructed values after perturbation
+        if output == 'terms':
+            res = self._pass_data(data, 'act')
+        if output == 'genes':
+            res = self._pass_data(data, 'rec')
+
         # if term was specified, subset
         if 'terms' in kwargs:
             terms = kwargs.get('terms')
-
             annot = ontobj.annot[str(self.top) + '_' + str(self.bottom)]
             term_ind = annot[annot.ID.isin(terms)].index.to_numpy()
 
-            act = act[:, term_ind]
+            res = res[:,term_ind]
+        
+        if 'genes' in kwargs:
+            genes = kwargs.get('genes')
+            onto_genes = ontobj.genes[str(self.top) + '_' + str(self.bottom)]
+            gene_ind = np.array([onto_genes.index(g) for g in genes])
 
-        return act
+            res = res[:,gene_ind]
+
+        return res
         
 
 
