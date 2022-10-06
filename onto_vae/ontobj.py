@@ -463,6 +463,14 @@ class Ontobj():
     def extract_dataset(self, dataset, top_thresh=1000, bottom_thresh=30):
         return self.data[str(top_thresh) + '_' + str(bottom_thresh)][dataset]
 
+    
+    def add_dataset(self, dataset, description, top_thresh=1000, bottom_thresh=30):
+        """
+        This function can be used if for example a perturbation should only be performed on
+        a subset of the data. Then this subset can be stored in separate slot.
+        """
+        self.data[str(top_thresh) + '_' + str(bottom_thresh)][description] = dataset
+
 
     def remove_link(self, term, gene, top_thresh=1000, bottom_thresh=30):
         """
