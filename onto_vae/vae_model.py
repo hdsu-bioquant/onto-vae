@@ -269,15 +269,19 @@ class OntoVAE(nn.Module):
         with torch.no_grad():
             reconstruction, _, _ = self.forward(data)
 
-        act = torch.cat(list(activation.values()), dim=1).detach().numpy()
+        act = torch.cat(list(activation.values()), dim=1).numpy()
         act = np.array(np.split(act, act.shape[1]/self.neuronnum, axis=1)).mean(axis=2).T
+        
+        # remove hooks
+        for h in hooks:
+            hooks[h].remove()
 
         # return pathway activities or reconstructed gene values
         if output == 'act':
             return np.hstack((z,act))
         if output == 'rec':
             return reconstruction.to('cpu').detach().numpy()
-
+        
 
     def get_pathway_activities(self, ontobj, dataset, **kwargs):
         """
