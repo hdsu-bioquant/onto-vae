@@ -322,7 +322,7 @@ class OntoVAE(nn.Module):
         dataset: which dataset to use for pathway activity retrieval
 
         **kwargs
-        genes: if we only want to get back values for certain genes
+        rec_genes: if we only want to get back values for certain genes
         """
         if self.ontology != ontobj.description:
             sys.exit('Wrong ontology provided, should be ' + self.ontology)
@@ -336,8 +336,8 @@ class OntoVAE(nn.Module):
         rec = self._pass_data(data, 'rec')
 
         # if genes were passed, subset
-        if 'genes' in kwargs:
-            genes = kwargs.get('genes')
+        if 'rec_genes' in kwargs:
+            genes = kwargs.get('rec_genes')
             onto_genes = ontobj.genes[str(self.top) + '_' + str(self.bottom)]
             gene_ind = np.array([onto_genes.index(g) for g in genes])
 
@@ -360,7 +360,7 @@ class OntoVAE(nn.Module):
 
         **kwargs
         terms: if we only want to get back the activities for certain terms (should be list of ids)
-        genes: if we only want to get back values for certain genes
+        rec_genes: if we only want to get back values for certain reconstructed genes
         """
 
         if self.ontology != ontobj.description:
@@ -392,8 +392,8 @@ class OntoVAE(nn.Module):
 
             res = res[:,term_ind]
         
-        if 'genes' in kwargs:
-            genes = kwargs.get('genes')
+        if 'rec_genes' in kwargs:
+            genes = kwargs.get('rec_genes')
             onto_genes = ontobj.genes[str(self.top) + '_' + str(self.bottom)]
             gene_ind = np.array([onto_genes.index(g) for g in genes])
 
