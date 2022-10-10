@@ -7,8 +7,6 @@ import numpy as np
 import itertools
 from goatools.base import get_godag
 from goatools.semsim.termwise.wang import SsWang
-import json
-import pickle
 import matplotlib.pyplot as plt 
 import seaborn as sns
 import colorcet as cc
@@ -61,7 +59,7 @@ class Ontobj():
         self.sem_sim = {}
         self.data = {}
 
-    def dag_annot(self, dag, gene_annot, **kwargs):
+    def _dag_annot(self, dag, gene_annot, **kwargs):
 
         """
         This function takes in a dag object imported by goatools package and returns
@@ -145,9 +143,9 @@ class Ontobj():
 
         # create initial annot file
         if 'id' in kwargs.keys():
-            annot = self.dag_annot(dag, gene_annot, id=kwargs['id'])
+            annot = self._dag_annot(dag, gene_annot, id=kwargs['id'])
         else:
-            annot = self.dag_annot(dag, gene_annot)
+            annot = self._dag_annot(dag, gene_annot)
 
         # convert gene annot file to dictionary
         gene_term_dict = {a: b["ID"].tolist() for a,b in gene_annot.groupby("Gene")}
@@ -228,27 +226,33 @@ class Ontobj():
         # check if base versions of files exits
         if self.graph_base is None:
             sys.exit('intial graph has not been created, initialize_dag function needs to be run first!')
-        
+        else:
+            graph_base = self.graph_base.copy()
+
         if self.annot_base is None:
             sys.exit('initial annot has not been created, initialize_dag function needs to be run first!')
-        
+        else:
+            annot_base = self.annot_base.copy()
+
         if self.genes_base is None:
             sys.exit('initial genes has not been created, initialize_dag function needs to be run first!')
+        else:
+            genes_base = self.genes_base.copy()
 
         # get terms for trimming
-        top_terms = self.annot_base[self.annot_base.desc_genes > top_thresh].ID.tolist()
-        bottom_terms = self.annot_base[self.annot_base.desc_genes < bottom_thresh].ID.tolist()[::-1]
+        top_terms = annot_base[annot_base.desc_genes > top_thresh].ID.tolist()
+        bottom_terms = annot_base[annot_base.desc_genes < bottom_thresh].ID.tolist()[::-1]
 
         # trim the DAG
         with contextlib.redirect_stdout(io.StringIO()):
-            term_dict_ttrim = trim_DAG_top(self.graph_base, self.annot_base.ID.tolist(), top_terms)
+            term_dict_ttrim = trim_DAG_top(graph_base, annot_base.ID.tolist(), top_terms)
         with contextlib.redirect_stdout(io.StringIO()):
-            term_dict_trim = trim_DAG_bottom(term_dict_ttrim, self.annot_base.ID.tolist(), bottom_terms)
+            term_dict_trim = trim_DAG_bottom(term_dict_ttrim, annot_base.ID.tolist(), bottom_terms)
 
         ### ANNOTATION FILE UPDATE ###
 
         # adjust the annotation file
-        new_annot = self.annot_base[self.annot_base.ID.isin(top_terms + bottom_terms) == False].reset_index(drop=True)
+        new_annot = annot_base[annot_base.ID.isin(top_terms + bottom_terms) == False].reset_index(drop=True)
 
         # split the DAG
         term_trim = {key: term_dict_trim[key] for key in list(term_dict_trim.keys()) if key in new_annot.ID.tolist()}
@@ -324,15 +328,17 @@ class Ontobj():
         if str(top_thresh) + '_' + str(bottom_thresh) not in self.graph.keys():
             sys.exit('trimmed graph with specified thresholds missing, trim_dag function needs to be run first!')
         else:
-            onto_dict = self.graph[str(top_thresh) + '_' + str(bottom_thresh)]
+            onto_dict = self.graph[str(top_thresh) + '_' + str(bottom_thresh)].copy()
+
         if str(top_thresh) + '_' + str(bottom_thresh) not in self.annot.keys():
             sys.exit('trimmed annot with specified thresholds missing, trim_dag function needs to be run first!')
         else:
-            annot = self.annot[str(top_thresh) + '_' + str(bottom_thresh)]
+            annot = self.annot[str(top_thresh) + '_' + str(bottom_thresh)].copy()
+
         if str(top_thresh) + '_' + str(bottom_thresh) not in self.genes.keys():
             sys.exit('trimmed genes with specified thresholds missing, trim_dag function needs to be run first!')
         else:
-            genes = self.genes[str(top_thresh) + '_' + str(bottom_thresh)]
+            genes = self.genes[str(top_thresh) + '_' + str(bottom_thresh)].copy()
 
         # get all possible depth combos
         depth = annot.loc[:,['ID', 'depth']]
@@ -379,7 +385,7 @@ class Ontobj():
         if str(top_thresh) + '_' + str(bottom_thresh) not in self.annot.keys():
             sys.exit('trimmed annot with specified thresholds missing, trim_dag function needs to be run first!')
         else:
-            annot = self.annot[str(top_thresh) + '_' + str(bottom_thresh)]
+            annot = self.annot[str(top_thresh) + '_' + str(bottom_thresh)].copy()
 
         # parse the DAG
         dag = get_godag(obo, optional_attrs={'relationship'}, prt=None)
@@ -566,14 +572,12 @@ class Ontobj():
         plt.tight_layout()
 
     
-    def wilcox_test(self, dataset, act, perturbed_act, direction='up', top_thresh=1000, bottom_thresh=30):
+    def wilcox_test(self, control, perturbed, direction='up', option='terms', top_thresh=1000, bottom_thresh=30):
         """ 
         Function to perform paired Wilcoxon test between activities and perturbed activities
 
         Parameters
         ----------
-        dataset
-            the dataset that the activities were computed on
         act
             numpy 2D array of pathway activities 
         perturbed_act
@@ -585,23 +589,37 @@ class Ontobj():
             top threshold for trimming
         bottom_thresh
             bottom_threshold for trimming
+        option
+            'terms' or 'genes'
         """
         # perform paired wilcoxon test over all terms
         alternative = 'greater' if direction == 'up' else 'less'
-        wilcox = [stats.wilcoxon(perturbed_act[:,i], act[:,i], zero_method='zsplit', alternative=alternative) for i in range(act.shape[1])]
+        wilcox = [stats.wilcoxon(perturbed[:,i], control[:,i], zero_method='zsplit', alternative=alternative) for i in range(control.shape[1])]
         stat = np.array([i[0] for i in wilcox])
         pvals = np.array([i[1] for i in wilcox])
         qvals = fdrcorrection(np.array(pvals))
 
-        # extract ontology annot
-        onto_annot = self.extract_annot(top_thresh=top_thresh, bottom_thresh=bottom_thresh)
+        if option == 'terms':
+            # extract ontology annot
+            onto_annot = self.extract_annot(top_thresh=top_thresh, bottom_thresh=bottom_thresh)
 
-        # create results dataframe and sort by pval
-        res = pd.DataFrame({'id': onto_annot.ID.tolist(),
-                            'term': onto_annot.Name.tolist(),
-                            'depth': onto_annot.depth.tolist(),
-                            'stat': stat,
-                            'pval' : pvals,
-                            'qval': qvals[1]})
-        res = res.sort_values('pval')
+            # create results dataframe 
+            res = pd.DataFrame({'id': onto_annot.ID.tolist(),
+                                'term': onto_annot.Name.tolist(),
+                                'depth': onto_annot.depth.tolist(),
+                                'stat': stat,
+                                'pval' : pvals,
+                                'qval': qvals[1]})
+        
+        else:
+            # extract ontology genes
+            onto_genes = self.extract_genes(top_thresh=top_thresh, bottom_thresh=bottom_thresh)
+
+            # create results dataframe
+            res = pd.DataFrame({'gene': onto_genes,
+                                'stat': stat,
+                                'pval' : pvals,
+                                'qval': qvals[1]})
+
+        res = res.sort_values('pval').reset_index(drop=True)
         return(res)
