@@ -295,7 +295,7 @@ class OntoVAE(nn.Module):
         if self.ontology != ontobj.description:
             sys.exit('Wrong ontology provided, should be ' + self.ontology)
 
-        data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset]
+        data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset].copy()
 
         # convert data to tensor and move to device
         data = torch.tensor(data, dtype=torch.float32).to(self.device)
@@ -327,12 +327,12 @@ class OntoVAE(nn.Module):
         if self.ontology != ontobj.description:
             sys.exit('Wrong ontology provided, should be ' + self.ontology)
 
-        data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset]
+        data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset].copy()
 
         # convert data to tensor and move to device
         data = torch.tensor(data, dtype=torch.float32).to(self.device)
 
-        # retireve pathway activities
+        # retrieve pathway activities
         rec = self._pass_data(data, 'rec')
 
         # if genes were passed, subset
@@ -366,7 +366,7 @@ class OntoVAE(nn.Module):
         if self.ontology != ontobj.description:
             sys.exit('Wrong ontology provided, should be ' + self.ontology)
 
-        data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset]
+        data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset].copy()
 
         # get indices of the genes in list
         indices = [self.genes.index(g) for g in genes]
