@@ -1,5 +1,4 @@
 pandas>=1.1.0
-numpy>=1.22
 goatools>=1.0.15
 torch>=1.10.0
 tqdm>=4.60.0
