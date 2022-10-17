@@ -251,23 +251,6 @@ def find_all_paths(graph, start, end, path=[]):
 ## ACCESS PACKAGE DATA
 ###--------------------------------------
 
-
-def sample_obo():
-    path = pkg_resources.resource_filename(__name__, 'data/pw.obo')
-    return path
-
-def sample_mapping():
-    path = pkg_resources.resource_filename(__name__, 'data/gene_term_mapping.txt')
-    return path
-
-def sample_expr():
-    path = pkg_resources.resource_filename(__name__, 'data/pbmc_sample_expr.csv')
-    return path
-
-def sample_annot():
-    path = pkg_resources.resource_filename(__name__, 'data/pbmc_sample_annot.csv')
-    return path
-
 def data_path():
     path = pkg_resources.resource_filename(__name__, 'data/')
     return path
