@@ -265,5 +265,9 @@ def sample_expr():
     return path
 
 def sample_annot():
-    pkg_resources.resource_filename(__name__, 'data/pbmc_sample_annot.csv')
+    path = pkg_resources.resource_filename(__name__, 'data/pbmc_sample_annot.csv')
+    return path
+
+def data_path():
+    path = pkg_resources.resource_filename(__name__, 'data/')
     return path
