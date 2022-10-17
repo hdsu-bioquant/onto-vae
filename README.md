@@ -15,7 +15,7 @@ cd onto-vae
 It is best to first create a new environment, e.g. with conda, and then install the package inside.
 
 ```
-conda create -n ontovae python=3.7
+conda create -n ontovae python=3.8
 conda activate ontovae
 pip install -r requirements.txt
 ```
