@@ -452,7 +452,7 @@ python-versions = ">=3.4"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7"
-content-hash = "fe43d2c3259f4b8c74dbe787514839c758a6bad52d1a4fe1aa5e1a1653d05715"
+content-hash = "b22bcf2007213b96618acafeb54e484188195065fd4c033b096008a23f17945b"
 
 [metadata.files]
 certifi = [

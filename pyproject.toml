@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "onto-vae"
-version = "0.1.3"
+version = "0.1.0"
 description = "Package to preprocess ontologies, train OntoVAE models and obtain pathway activities."
 authors = ["daria-dc <daria.doncevic@gmail.com>"]
 repository = "https://github.com/hdsu-bioquant/onto-vae"
@@ -21,7 +21,3 @@ seaborn = ">=0.11.0"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-[[tool.poetry.source]]
-name = "onto-vae"
-url = "https://test.pypi.org/simple/"
-secondary = true
