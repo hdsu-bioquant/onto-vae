@@ -1,4 +1,6 @@
-# OntoVAE
+<img src="logo.png" width="500">
+
+### Ontology guided Variational Autoencoder
 
 OntoVAE is a package that can be used to integrate biological ontologies into latent space and decoder of Variational Autoencoder models. 
 This allows direct retrieval of pathway activities from the model.
