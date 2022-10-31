@@ -59,7 +59,7 @@ class Ontobj():
         self.sem_sim = {}
         self.data = {}
 
-    def _dag_annot(self, dag, gene_annot, **kwargs):
+    def _dag_annot(self, dag, gene_annot, filter_id=None):
 
         """
         This function takes in a dag object imported by goatools package and returns
@@ -77,17 +77,17 @@ class Ontobj():
             a dag parsed from an obo file
         gene_annot
             pandas dataframe containing gene -> term annotation
-        **kwargs
+        filter_id
             to pass if ids should be filtered, 
-            {'id':'biological_process'}
+            {'filter_id':'biological_process'}
         """
   
         # parse obo file and create list of term ids
         term_ids = list(set([vars(dag[term_id])['id'] for term_id in list(dag.keys())]))
 
-        # if an id type was passed in kwargs, filter based on that
-        if 'id' in kwargs.keys():
-            term_idx = [vars(dag[term_id])['namespace'] == kwargs['id'] for term_id in term_ids]
+        # if filter_id was specified, filter the ontology terms
+        if filter_id is not None:
+            term_idx = [vars(dag[term_id])['namespace'] == filter_id for term_id in term_ids]
             valid_ids = [N for i,N in enumerate(term_ids) if term_idx[i] == True]
             term_ids = valid_ids
             gene_annot = gene_annot[gene_annot.ID.isin(term_ids)]
@@ -108,18 +108,20 @@ class Ontobj():
         return annot
 
 
-    def initialize_dag(self, obo, gene_annot, **kwargs):
+    def initialize_dag(self, obo, gene_annot, filter_id = None):
 
         """
         This function initializes our object by filling the slots
         annot
         genes
         graph
+        Terms with 0 descendant genes are removed!
 
         Parameters
         -------------
         obo
             Path to the obo file
+
         gene_annot
             gene_annot
             Path two a tab-separated 2-column text file
@@ -127,11 +129,10 @@ class Ontobj():
             Gene1   Term2
             ...
 
-        **kwargs
-            to pass if ids should be filtered, 
-            id = 'biological_process'
-
-        Terms with 0 descendant genes are removed!
+        filter_id
+            to pass if ids should be filtered, e.g.
+            filter_id = 'biological_process'
+            default: None
         """
 
         # load obo file and gene -> term mapping file
@@ -142,8 +143,8 @@ class Ontobj():
         self.identifiers = 'Ensembl' if 'ENS' in gene_annot.iloc[0,0] else 'HGNC'
 
         # create initial annot file
-        if 'id' in kwargs.keys():
-            annot = self._dag_annot(dag, gene_annot, id=kwargs['id'])
+        if filter_id is not None:
+            annot = self._dag_annot(dag, gene_annot, filter_id=filter_id)
         else:
             annot = self._dag_annot(dag, gene_annot)
 
