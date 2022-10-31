@@ -17,9 +17,10 @@ from onto_vae.utils import *
 
 class Ontobj():
     """
-    This class functions as a container for a preprocessed ontology (and optionally datasets)
-    and is needed by OntoVAE to train OntoVAE models.
-    The class has the following slots
+    This class functions as a container for a preprocessed ontology and matched datasets.
+    An instance of the class Ontobj is needed by the OntoVAE class to train OntoVAE models.
+
+    Predefined slots:
     annot_base: contains annotation files for ontology with the following columns
             'ID': The ID of the DAG term
             'Name': The name 
@@ -34,15 +35,29 @@ class Ontobj():
     annot, genes and graph can contain different trimmed versions
     desc_genes: a dictionary with all descendant genes (terms -> descendant genes)
     sem_sim: semantic similarities for all genes of one of the elements in the genes slot
-    data: 2d numpy array with expression values of a dataset matched to the ontology
+    data: a dictionary containing 2d numpy arrays with expression values, one for each dataset matched to the ontology
 
     Parameters
-    -------------
-    working_dir
-    description: to identify the object, used ontology can be specified here, for example 'GO' or 'HPO' or 'GO_BP'
+    ----------
+    description
+        to identify the object, used ontology or gene identifiers can be specified here, for example 'GO' or 'HPO' or 'GO_BP'
     """
 
-    __slots__=('description', 'identifiers', 'annot_base', 'genes_base', 'graph_base', 'annot', 'genes', 'graph', 'desc_genes', 'masks', 'sem_sim', 'data')
+    __slots__=(
+        'description', 
+        'identifiers', 
+        'annot_base', 
+        'genes_base', 
+        'graph_base', 
+        'annot', 
+        'genes', 
+        'graph', 
+        'desc_genes', 
+        'masks', 
+        'sem_sim', 
+        'data'
+        )
+
     def __init__(self, description):
         super(Ontobj, self).__init__()
 
@@ -62,14 +77,7 @@ class Ontobj():
     def _dag_annot(self, dag, gene_annot, filter_id=None):
 
         """
-        This function takes in a dag object imported by goatools package and returns
-        an annotation pandas dataframe where each row is one term containing the following columns:
-        'ID': The ID of the DAG term
-        'Name': The name 
-        'depth': the depth (longest distance to a root node)
-        'children': number of children of the term
-        'parents': number of parents of the term
-        The pandas dataframe is sorted by 'depth' and 'ID'
+        Creates annotation dataframe from imported obo file.
         
         Parameters
         ----------
@@ -78,8 +86,18 @@ class Ontobj():
         gene_annot
             pandas dataframe containing gene -> term annotation
         filter_id
-            to pass if ids should be filtered, 
-            {'filter_id':'biological_process'}
+            to pass if ids should be filtered, e.g.
+            filter_id = 'biological_process'
+
+        Returns
+        -------
+        A pandas dataframe with ontology annotation, sorted by depth and ID.
+        Each row is one term, the columns are:
+            'ID': The ID of the ontology term
+            'Name': The name of the ontology term
+            'depth': the depth (longest distance to a root node)
+            'children': number of children of the term
+            'parents': number of parents of the term
         """
   
         # parse obo file and create list of term ids
@@ -111,11 +129,8 @@ class Ontobj():
     def initialize_dag(self, obo, gene_annot, filter_id = None):
 
         """
-        This function initializes our object by filling the slots
-        annot
-        genes
-        graph
-        Terms with 0 descendant genes are removed!
+        Dag is initialized from obo file and annotation.
+        The slots annot_base, genes_base, and graph_base are filled.
 
         Parameters
         -------------
@@ -132,7 +147,6 @@ class Ontobj():
         filter_id
             to pass if ids should be filtered, e.g.
             filter_id = 'biological_process'
-            default: None
         """
 
         # load obo file and gene -> term mapping file
@@ -212,8 +226,8 @@ class Ontobj():
     def trim_dag(self, top_thresh=1000, bottom_thresh=30):
 
         """
-        This function trims the DAG based on user-defined thresholds and saves trimmed versions 
-        of the graph, annot and genes files in the respective slots
+        DAG is trimmed based on user-defined thresholds.
+        Trimmed version is saved in the graph, annot and genes slots.
 
         Parameters
         ----------
@@ -313,7 +327,7 @@ class Ontobj():
     def create_masks(self, top_thresh=1000, bottom_thresh=30):
 
         """
-        This function generates the masks for the Onto VAE model.
+        Creation of masks to initialize the wiring in the latent space and decoder of OntoVAE.
             
         Parameters
         ----------
@@ -321,8 +335,6 @@ class Ontobj():
             top threshold for trimming
         bottom_thresh
             bottom_threshold for trimming
-        
-        The parameters tell the function which trimmed version to use.
         """
 
         # check if neccesary objects exist
@@ -365,21 +377,16 @@ class Ontobj():
     def compute_wsem_sim(self, obo, top_thresh=1000, bottom_thresh=30):
 
         """
-        This function takes an obo file and an ontology annot file and returns
-        a 2D numpy array with Wang semantic similarities between the IDs of the annot file.
-        Only used for web application
+        Wang semantic similarities between a list of ontology terms are computed.
         
         Parameters
         ----------
         obo
             Path to the obo file
-
         top_thresh
             top threshold for trimming
         bottom_thresh
             bottom_threshold for trimming
-        
-        The parameters tell the function which trimmed version to use.
         """
 
         # check if neccesary files exist and load them 
@@ -407,25 +414,21 @@ class Ontobj():
     def match_dataset(self, expr_data, name, top_thresh=1000, bottom_thresh=30):
 
         """
-        This function takes a dataset, matches the features to the features of the preprocessed ontology and stores it in the data slot
+        A dataset is matched to a trimmed ontology and stored in the data slot.
 
         Parameters
         ----------
         expr_data
-            a Pandas dataframe with gene names in index and samples names in columns OR 
-            Path to the dataset to be matched, can be either:
+            dataset with unique gene names in rows and samples in columns, can be either:
+            - a Pandas dataframe 
+            - a path to the dataset file, can be either:
               - a file with extension .csv (separated by ',')
-              - a file with extension .txt (separated by '\t'), 
-                with features in rows and samples in columns
-             The dataset should not have duplicated genenames!
+              - a file with extension .txt (separated by '\t') 
 
         top_thresh
             top threshold for trimming
         bottom_thresh
             bottom_threshold for trimming
-        
-        The parameters tell the function which trimmed version to use.
-
         name
             name to be used for identifying the matched dataset
         """
@@ -462,28 +465,66 @@ class Ontobj():
 
     
     def extract_annot(self, top_thresh=1000, bottom_thresh=30):
+        """
+        Helper function to extract table from annot slot.
+
+        Parameters
+        ----------
+        top_thresh
+            top threshold for trimming
+        bottom_thresh
+            bottom_threshold for trimming
+        """
         return self.annot[str(top_thresh) + '_' + str(bottom_thresh)]
 
     def extract_genes(self, top_thresh=1000, bottom_thresh=30):
+        """
+        Helper function to extract list from genes slot.
+
+        Parameters
+        ----------
+        top_thresh
+            top threshold for trimming
+        bottom_thresh
+            bottom_threshold for trimming
+        """
         return self.genes[str(top_thresh) + '_' + str(bottom_thresh)]
 
     def extract_dataset(self, dataset, top_thresh=1000, bottom_thresh=30):
+        """
+        Helper function to extract dataset from data slot.
+
+        Parameters
+        ----------
+        top_thresh
+            top threshold for trimming
+        bottom_thresh
+            bottom_threshold for trimming
+        """
         return self.data[str(top_thresh) + '_' + str(bottom_thresh)][dataset]
 
     
-    def add_dataset(self, dataset, description, top_thresh=1000, bottom_thresh=30):
+    def add_dataset(self, dataset, name, top_thresh=1000, bottom_thresh=30):
         """
-        This function can be used if for example a perturbation should only be performed on
-        a subset of the data. Then this subset can be stored in separate slot.
+        Helper function to add matched dataset to data slot.
+
+        Parameters
+        ----------
+        dataset
+            2d numpy array of the dataset to be added 
+        name
+            name of the dataset
+        top_thresh
+            top threshold for trimming
+        bottom_thresh
+            bottom_threshold for trimming
         """
-        self.data[str(top_thresh) + '_' + str(bottom_thresh)][description] = dataset
+        self.data[str(top_thresh) + '_' + str(bottom_thresh)][name] = dataset
 
 
     def remove_link(self, term, gene, top_thresh=1000, bottom_thresh=30):
         """
-        This function removes the link between a gene and a term in the masks slot.
-        You will modify the masks! So better do not save the ontobj after that, but just
-        remove the link before training a model
+        Modifies the masks slot by removing the link between a gene and a term.
 
         Parameters
         ----------
@@ -515,14 +556,17 @@ class Ontobj():
 
     def plot_scatter(self, sample_annot, color_by, act, term1, term2, top_thresh=1000, bottom_thresh=30):
         """ 
-        This function is used to make a scatterplot of two pathway activities
+       Creates a scatterplot of two pathway activities.
 
         Parameters
         ----------
         sample_annot
-            a Pandas dataframe with gene names in index and samples names in columns OR 
-            a file with extension .csv (separated by ',') or with extension .txt (separated by '\t'), 
-            with features in rows and samples in columns
+            sample annotation with samples in rows and covariates in columns, can be either:
+            - a Pandas dataframe 
+            - a path to the dataset file, can be either:
+              - a file with extension .csv (separated by ',')
+              - a file with extension .txt (separated by '\t')
+
         color_by
             the column of sample_annot to use for coloring
         act
@@ -575,7 +619,7 @@ class Ontobj():
     
     def wilcox_test(self, control, perturbed, direction='up', option='terms', top_thresh=1000, bottom_thresh=30):
         """ 
-        Function to perform paired Wilcoxon test between activities and perturbed activities
+        Performs paired Wilcoxon test between activities and perturbed activities.
 
         Parameters
         ----------
