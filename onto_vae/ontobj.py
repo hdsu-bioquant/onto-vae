@@ -324,7 +324,7 @@ class Ontobj():
         self.desc_genes[str(top_thresh) + '_' + str(bottom_thresh)] = desc_genes
 
 
-    def create_masks(self, top_thresh=1000, bottom_thresh=30):
+    def create_masks(self, top_thresh=1000, bottom_thresh=30, module='decoder'):
 
         """
         Creation of masks to initialize the wiring in the latent space and decoder of OntoVAE.
@@ -335,6 +335,9 @@ class Ontobj():
             top threshold for trimming
         bottom_thresh
             bottom_threshold for trimming
+        module
+            decoder: Ontology will be located in decoder (default)
+            encoder: Ontology will be located in encoder 
         """
 
         # check if neccesary objects exist
@@ -353,6 +356,10 @@ class Ontobj():
         else:
             genes = self.genes[str(top_thresh) + '_' + str(bottom_thresh)].copy()
 
+        # check if mask slot for thresholds exists
+        if str(top_thresh) + '_' + str(bottom_thresh) not in self.masks.keys():
+            self.masks[str(top_thresh) + '_' + str(bottom_thresh)] = {}
+
         # get all possible depth combos
         depth = annot.loc[:,['ID', 'depth']]
         gene_depth = pd.DataFrame({'ID': genes, 'depth': np.max(depth.depth)+1})
@@ -362,16 +369,40 @@ class Ontobj():
         # create binary matrix for all possible depth combos
         bin_mat_list = [create_binary_matrix(depth, onto_dict, p[1], p[0]) for p in depth_combos]
 
-        # generate masks for the decoder network
+        # generate masks for the ontology network
+        if module == 'decoder':
+            masks = self._decoder_masks(depth, bin_mat_list)
+        else:
+            masks = self._encoder_masks(depth, bin_mat_list)
+
+        # store masks
+        self.masks[str(top_thresh) + '_' + str(bottom_thresh)][module] = masks
+
+
+    def _decoder_masks(self, depth, bin_mat_list):
+        """
+        Helper function to create binary masks for decoder
+        """
         levels = ['Level' + str(d) for d in list(set(depth['depth'].tolist()))]
         mask_cols = [list(levels)[0:i+1][::-1] for i in range(len(levels)-1)]
         mask_rows = levels[1:]
 
         idx = [[mat.columns.name in mask_cols[i] and mat.index.name == mask_rows[i] for mat in bin_mat_list] for i in range(len(mask_rows))]
         masks = [np.array(pd.concat([N for i,N in enumerate(bin_mat_list) if j[i] == True][::-1], axis=1)) for j in idx]
+        return masks
 
-        # store masks
-        self.masks[str(top_thresh) + '_' + str(bottom_thresh)] = masks
+    def _encoder_masks(self, depth, bin_mat_list):
+        """
+        Helper function to create binary masks for encoder
+        """
+        levels = ['Level' + str(d) for d in list(set(depth['depth'].tolist()))][::-1]
+        mask_cols = [list(levels)[0:i+1][::-1] for i in range(len(levels)-1)]
+        mask_rows = levels[1:]
+
+        idx = [[mat.index.name in mask_cols[i] and mat.columns.name == mask_rows[i] for mat in bin_mat_list] for i in range(len(mask_rows))]
+        masks = [np.array(pd.concat([N.T for i,N in enumerate(bin_mat_list) if j[i] == True], axis=1)) for j in idx]
+        return masks
+
 
 
     def compute_wsem_sim(self, obo, top_thresh=1000, bottom_thresh=30):
