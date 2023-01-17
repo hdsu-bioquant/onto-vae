@@ -98,12 +98,13 @@ class Decoder(nn.Module):
     Parameters
     -------------
     in_features: # of features that are used as input
+    latent_dim: latent dimension
     layer_dims: list giving the dimensions of the hidden layers
-    latent_dim: latent dimension, default is 128
-    dr: dropout rate, default is 0
+    drop: dropout rate, default is 0
+    z_drop: dropout rate for latent space, default is 0.5
     """
 
-    def __init__(self, in_features, latent_dim, layer_dims=[512], drop=0):
+    def __init__(self, in_features, latent_dim, layer_dims=[512], drop=0, z_drop=0.5):
         super(Decoder, self).__init__()
 
         self.in_features = in_features
@@ -111,13 +112,14 @@ class Decoder(nn.Module):
         self.layer_nums = [layer_dims[i:i+2] for i in range(len(layer_dims)-1)]
         self.latent_dim = latent_dim
         self.drop = drop
+        self.z_drop = z_drop
 
         self.decoder = nn.ModuleList(
             [
                 nn.Sequential(
                     nn.Linear(self.latent_dim, self.layer_dims[0]),
                     nn.BatchNorm1d(self.layer_dims[0]),
-                    nn.Dropout(p=self.drop),
+                    nn.Dropout(p=self.z_drop),
                     nn.ReLU()
                 )
             ] +
@@ -163,23 +165,23 @@ class OntoEncoder(nn.Module):
     in_features: # of features that are used as input
     layer_dims: list of tuples that define in and out for each layer
     mask_list: matrix for each layer transition, that determines which weights to zero out
-    drop: dropout rate, default is 0
-    z_drop: dropout rate for latent space, default is 0.5
     """ 
 
-    def __init__(self, in_features, layer_dims, mask_list, drop=0, z_drop=0.5):
+    def __init__(self, in_features, layer_dims, mask_list, latent_dim, neuronnum=3):
         super(OntoEncoder, self).__init__()
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.in_features = in_features
-        self.layer_dims = layer_dims
+        self.layer_dims = np.hstack([layer_dims[0], layer_dims[1:] * neuronnum])
         self.layer_shapes = [(np.sum(self.layer_dims[:i+1]), self.layer_dims[i+1]) for i in range(len(self.layer_dims)-1)]
         self.masks = []
-        for m in mask_list:
+        self.masks.append(mask_list[0].repeat_interleave(neuronnum, dim=0).to(self.device))
+        for m in mask_list[1:]:
+            m = m.repeat_interleave(neuronnum, dim=0)
+            to_rep = m.shape[1] - layer_dims[0]
+            m = torch.hstack((m[:,:to_rep].repeat_interleave(neuronnum, dim=1), m[:,to_rep:]))
             self.masks.append(m.to(self.device))
-        self.latent_dim = self.layer_dims[-1]
-        self.drop = drop
-        self.z_drop = z_drop
+        self.latent_dim = latent_dim
 
         # Encoder
         self.encoder = nn.ModuleList(
@@ -189,13 +191,11 @@ class OntoEncoder(nn.Module):
         ).to(self.device)
 
         self.mu = nn.Sequential(
-            nn.Linear(self.layer_shapes[-1][0], self.latent_dim),
-            nn.Dropout(p=self.z_drop)
+            nn.Linear(self.layer_shapes[-1][0], self.latent_dim)
         ).to(self.device)
 
         self.logvar = nn.Sequential(
-            nn.Linear(self.layer_shapes[-1][0], self.latent_dim),
-            nn.Dropout(p=self.z_drop)
+            nn.Linear(self.layer_shapes[-1][0], self.latent_dim)
         ).to(self.device)
 
         # apply masks to zero out weights of non-existing connections
@@ -209,8 +209,7 @@ class OntoEncoder(nn.Module):
 
     def build_block(self, ins, outs):
         return nn.Sequential(
-            nn.Linear(ins, outs),
-            nn.Dropout(p=self.drop)
+            nn.Linear(ins, outs)
         )
     
 
@@ -252,10 +251,10 @@ class OntoDecoder(nn.Module):
     layer_dims: list of tuples that define in and out for each layer
     mask_list: matrix for each layer transition, that determines which weights to zero out
     latent_dim: latent dimension
-    drop: dropout rate, default is 0
+    neuronnum: number of neurons used per term
     """ 
 
-    def __init__(self, in_features, layer_dims, mask_list, latent_dim, neuronnum=1, drop=0):
+    def __init__(self, in_features, layer_dims, mask_list, latent_dim, neuronnum=3):
         super(OntoDecoder, self).__init__()
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -269,7 +268,6 @@ class OntoDecoder(nn.Module):
             self.masks.append(m.to(self.device))
         self.masks.append(mask_list[-1].repeat_interleave(neuronnum, dim=1).to(self.device))
         self.latent_dim = latent_dim
-        self.drop = drop
 
         # Decoder
         self.decoder = nn.ModuleList(
@@ -278,8 +276,7 @@ class OntoDecoder(nn.Module):
 
             [
                 nn.Sequential(
-                    nn.Linear(self.layer_shapes[-1][0], self.in_features)#,
-                    #nn.Sigmoid()
+                    nn.Linear(self.layer_shapes[-1][0], self.in_features)
                 )
             ]
             ).to(self.device)
@@ -294,9 +291,7 @@ class OntoDecoder(nn.Module):
 
     def build_block(self, ins, outs):
         return nn.Sequential(
-            nn.Linear(ins, outs)#,
-            #nn.Dropout(p=self.drop),
-            #nn.Sigmoid()
+            nn.Linear(ins, outs)
         )
 
     def forward(self, z):
