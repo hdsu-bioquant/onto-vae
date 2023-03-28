@@ -506,7 +506,7 @@ class Ontobj():
         bottom_thresh
             bottom_threshold for trimming
         """
-        return self.annot[str(top_thresh) + '_' + str(bottom_thresh)]
+        return self.annot[str(top_thresh) + '_' + str(bottom_thresh)].copy()
 
     def extract_genes(self, top_thresh=1000, bottom_thresh=30):
         """
@@ -519,7 +519,7 @@ class Ontobj():
         bottom_thresh
             bottom_threshold for trimming
         """
-        return self.genes[str(top_thresh) + '_' + str(bottom_thresh)]
+        return self.genes[str(top_thresh) + '_' + str(bottom_thresh)].copy()
 
     def extract_dataset(self, dataset, top_thresh=1000, bottom_thresh=30):
         """
@@ -532,7 +532,7 @@ class Ontobj():
         bottom_thresh
             bottom_threshold for trimming
         """
-        return self.data[str(top_thresh) + '_' + str(bottom_thresh)][dataset]
+        return self.data[str(top_thresh) + '_' + str(bottom_thresh)][dataset].copy()
 
     
     def add_dataset(self, dataset, name, top_thresh=1000, bottom_thresh=30):
@@ -550,7 +550,7 @@ class Ontobj():
         bottom_thresh
             bottom_threshold for trimming
         """
-        self.data[str(top_thresh) + '_' + str(bottom_thresh)][name] = dataset
+        self.data[str(top_thresh) + '_' + str(bottom_thresh)][name] = dataset.copy()
 
 
     def remove_link(self, term, gene, top_thresh=1000, bottom_thresh=30):
