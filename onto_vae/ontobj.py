@@ -240,17 +240,17 @@ class Ontobj():
 
         # check if base versions of files exits
         if self.graph_base is None:
-            sys.exit('intial graph has not been created, initialize_dag function needs to be run first!')
+            raise ValueError('Initial graph has not been created, initialize_dag function needs to be run first!')
         else:
             graph_base = self.graph_base.copy()
 
         if self.annot_base is None:
-            sys.exit('initial annot has not been created, initialize_dag function needs to be run first!')
+            raise ValueError('Initial annotation has not been created, initialize_dag function needs to be run first!')
         else:
             annot_base = self.annot_base.copy()
 
         if self.genes_base is None:
-            sys.exit('initial genes has not been created, initialize_dag function needs to be run first!')
+            raise ValueError('Initial gene list has not been created, initialize_dag function needs to be run first!')
         else:
             genes_base = self.genes_base.copy()
 
@@ -342,17 +342,17 @@ class Ontobj():
 
         # check if neccesary objects exist
         if str(top_thresh) + '_' + str(bottom_thresh) not in self.graph.keys():
-            sys.exit('trimmed graph with specified thresholds missing, trim_dag function needs to be run first!')
+            raise ValueError('Trimmed graph with specified thresholds missing, trim_dag function needs to be run first!')
         else:
             onto_dict = self.graph[str(top_thresh) + '_' + str(bottom_thresh)].copy()
 
         if str(top_thresh) + '_' + str(bottom_thresh) not in self.annot.keys():
-            sys.exit('trimmed annot with specified thresholds missing, trim_dag function needs to be run first!')
+            raise ValueError('Trimmed annotation with specified thresholds missing, trim_dag function needs to be run first!')
         else:
             annot = self.annot[str(top_thresh) + '_' + str(bottom_thresh)].copy()
 
         if str(top_thresh) + '_' + str(bottom_thresh) not in self.genes.keys():
-            sys.exit('trimmed genes with specified thresholds missing, trim_dag function needs to be run first!')
+            raise ValueError('Trimmed gene list with specified thresholds missing, trim_dag function needs to be run first!')
         else:
             genes = self.genes[str(top_thresh) + '_' + str(bottom_thresh)].copy()
 
@@ -422,7 +422,7 @@ class Ontobj():
 
         # check if neccesary files exist and load them 
         if str(top_thresh) + '_' + str(bottom_thresh) not in self.annot.keys():
-            sys.exit('trimmed annot with specified thresholds missing, trim_dag function needs to be run first!')
+            raise ValueError('Trimmed annotation with specified thresholds missing, trim_dag function needs to be run first!')
         else:
             annot = self.annot[str(top_thresh) + '_' + str(bottom_thresh)].copy()
 
@@ -467,7 +467,7 @@ class Ontobj():
         # check if ontology has been trimmed and import the genes file
 
         if str(top_thresh) + '_' + str(bottom_thresh) not in self.genes.keys():
-            sys.exit('trimmed genes with specified thresholds missing, trim_dag function needs to be run first!')
+            raise ValueError('Trimmed genes with specified thresholds missing, trim_dag function needs to be run first!')
         else:
             genes = pd.DataFrame(self.genes[str(top_thresh) + '_' + str(bottom_thresh)])
 
@@ -483,7 +483,7 @@ class Ontobj():
             elif ext == 'txt':
                 expr = pd.read_csv(expr_data, sep="\t", index_col=0)
             else:
-                sys.exit('File extension not supported.')
+                raise ValueError('File extension not supported.')
 
         # merge data with ontology genes and save
         genes.index = genes.iloc[:,0]
