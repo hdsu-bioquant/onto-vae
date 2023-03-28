@@ -41,7 +41,7 @@ class OntoVAE(nn.Module):
         super(OntoVAE, self).__init__()
 
         if not str(top_thresh) + '_' + str(bottom_thresh) in ontobj.genes.keys():
-            sys.exit('Available trimming thresholds are: ' + ', '.join(list(ontobj.genes.keys())))
+            raise ValueError('Available trimming thresholds are: ' + ', '.join(list(ontobj.genes.keys())))
 
         self.ontology = ontobj.description
         self.top = top_thresh
@@ -73,7 +73,7 @@ class OntoVAE(nn.Module):
                                     self.neuronnum)
         
         if not dataset in ontobj.data[str(top_thresh) + '_' + str(bottom_thresh)].keys():
-            sys.exit('Available datasets are: ' + ', '.join(list(ontobj.data[str(top_thresh) + '_' + str(bottom_thresh)].keys())))
+            raise ValueError('Available datasets are: ' + ', '.join(list(ontobj.data[str(top_thresh) + '_' + str(bottom_thresh)].keys())))
 
         self.X = ontobj.data[str(top_thresh) + '_' + str(bottom_thresh)][dataset]
 
@@ -341,7 +341,7 @@ class OntoVAE(nn.Module):
             list of ontology term ids whose activities should be retrieved
         """
         if self.ontology != ontobj.description:
-            sys.exit('Wrong ontology provided, should be ' + self.ontology)
+            raise ValueError('Wrong ontology provided, should be ' + self.ontology)
 
         data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset].copy()
 
@@ -375,7 +375,7 @@ class OntoVAE(nn.Module):
             list of genes whose reconstructed values should be retrieved
         """
         if self.ontology != ontobj.description:
-            sys.exit('Wrong ontology provided, should be ' + self.ontology)
+            raise ValueError('Wrong ontology provided, should be ' + self.ontology)
 
         data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset].copy()
 
@@ -420,7 +420,7 @@ class OntoVAE(nn.Module):
         """
 
         if self.ontology != ontobj.description:
-            sys.exit('Wrong ontology provided, should be ' + self.ontology)
+            raise ValueError('Wrong ontology provided, should be ' + self.ontology)
 
         data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset].copy()
 
@@ -520,7 +520,7 @@ class OntoEncVAE(nn.Module):
                                 self.z_drop)
 
         if not dataset in ontobj.data[str(top_thresh) + '_' + str(bottom_thresh)].keys():
-            sys.exit('Available datasets are: ' + ', '.join(list(ontobj.data[str(top_thresh) + '_' + str(bottom_thresh)].keys())))
+            raise ValueError('Available datasets are: ' + ', '.join(list(ontobj.data[str(top_thresh) + '_' + str(bottom_thresh)].keys())))
 
         self.X = ontobj.data[str(top_thresh) + '_' + str(bottom_thresh)][dataset]
 
@@ -790,7 +790,7 @@ class OntoEncVAE(nn.Module):
             list of ontology term ids whose activities should be retrieved
         """
         if self.ontology != ontobj.description:
-            sys.exit('Wrong ontology provided, should be ' + self.ontology)
+            raise ValueError('Wrong ontology provided, should be ' + self.ontology)
 
         data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset].copy()
 
@@ -824,7 +824,7 @@ class OntoEncVAE(nn.Module):
             list of genes whose reconstructed values should be retrieved
         """
         if self.ontology != ontobj.description:
-            sys.exit('Wrong ontology provided, should be ' + self.ontology)
+            raise ValueError('Wrong ontology provided, should be ' + self.ontology)
 
         data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset].copy()
 
@@ -869,7 +869,7 @@ class OntoEncVAE(nn.Module):
         """
 
         if self.ontology != ontobj.description:
-            sys.exit('Wrong ontology provided, should be ' + self.ontology)
+            raise ValueError('Wrong ontology provided, should be ' + self.ontology)
 
         data = ontobj.data[str(self.top) + '_' + str(self.bottom)][dataset].copy()
 
