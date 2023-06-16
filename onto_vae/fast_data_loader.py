@@ -44,3 +44,5 @@ class FastTensorDataLoader:
 
     def __len__(self):
         return self.n_batches
+    
+# small test
