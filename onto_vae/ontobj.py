@@ -42,11 +42,16 @@ class Ontobj():
     description: to identify the object, used ontology can be specified here, for example 'GO' or 'HPO' or 'GO_BP'
     """
 
-    __slots__=('description', 'identifiers', 'annot_base', 'genes_base', 'graph_base', 'annot', 'genes', 'graph', 'desc_genes', 'masks', 'sem_sim', 'data')
+    __slots__=('description', 'reg_mask', 'combined_mask', 'identifiers', 'annot_base', 'genes_base', 'graph_base', 'annot', 'genes', 'graph', 'desc_genes', 'masks', 'sem_sim', 'data')
     def __init__(self, description):
         super(Ontobj, self).__init__()
 
         self.description = description
+        ################################################
+        # store mask with regularization positions and mask with all connections
+        self.reg_mask = {}
+        self.combined_mask = {}
+        ##################################################
         self.identifiers = None
         self.annot_base = None
         self.genes_base = None
@@ -309,7 +314,7 @@ class Ontobj():
         self.desc_genes[str(top_thresh) + '_' + str(bottom_thresh)] = desc_genes
 
 
-    def create_masks(self, top_thresh=1000, bottom_thresh=30):
+    def create_masks(self, top_thresh=1000, bottom_thresh=30, **kwargs):
 
         """
         This function generates the masks for the Onto VAE model.
@@ -357,8 +362,28 @@ class Ontobj():
         idx = [[mat.columns.name in mask_cols[i] and mat.index.name == mask_rows[i] for mat in bin_mat_list] for i in range(len(mask_rows))]
         masks = [np.array(pd.concat([N for i,N in enumerate(bin_mat_list) if j[i] == True][::-1], axis=1)) for j in idx]
 
-        # store masks
+        ########################### change mask here ############################
+        # combine reg_mask with computed mask and change last mask
+        reg_mask = kwargs.get("reg_mask", None)
+        if type(reg_mask) is np.ndarray:
+            # combine mask with pre-set connections with regularisation mask (1 at positions that should be regularized)
+            combined_mask = masks[-1] + reg_mask
+            # set all postions with values > 1 to 1
+            combined_mask[combined_mask > 1] = 1
+
+        # replace the last mask with the combined mask
+        masks[-1] = combined_mask
+
+        #########################################################################
+
+        # store changed masks
         self.masks[str(top_thresh) + '_' + str(bottom_thresh)] = masks
+
+        #########################################################################
+        # store mask with regularization positions
+        self.reg_mask[str(top_thresh) + '_' + str(bottom_thresh)] = reg_mask
+        self.combined_mask[str(top_thresh) + '_' + str(bottom_thresh)] = combined_mask
+        #########################################################################
 
 
     def compute_wsem_sim(self, obo, top_thresh=1000, bottom_thresh=30):

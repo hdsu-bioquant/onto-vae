@@ -259,6 +259,7 @@ class OntoDecoder(nn.Module):
         super(OntoDecoder, self).__init__()
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # in_features: all genes
         self.in_features = in_features
         self.layer_dims = np.hstack([layer_dims[:-1] * neuronnum, layer_dims[-1]])
         self.layer_shapes = [(np.sum(self.layer_dims[:i+1]), self.layer_dims[i+1]) for i in range(len(self.layer_dims)-1)]
@@ -273,9 +274,9 @@ class OntoDecoder(nn.Module):
 
         # Decoder
         self.decoder = nn.ModuleList(
-
+            # all layers except output
             [self.build_block(x[0], x[1]) for x in self.layer_shapes[:-1]] +
-
+            # output layer
             [
                 nn.Sequential(
                     nn.Linear(self.layer_shapes[-1][0], self.in_features)#,
@@ -287,6 +288,7 @@ class OntoDecoder(nn.Module):
         # apply masks to zero out weights of non-existent connections
         for i in range(len(self.decoder)):
             self.decoder[i][0].weight.data = torch.mul(self.decoder[i][0].weight.data, self.masks[i])
+        
 
         # make all weights in decoder positive
         for i in range(len(self.decoder)):

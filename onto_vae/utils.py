@@ -2,6 +2,14 @@ import pandas as pd
 import itertools
 import copy
 import pkg_resources
+import torch
+
+########### regularization
+def l1_regularization(weights, pos, l1, lr):
+    norm = l1 * lr
+    weights[pos] = weights[pos] * norm
+    return weights
+
 
 
 

@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from .modules import Encoder, Decoder, OntoEncoder, OntoDecoder
 from .fast_data_loader import FastTensorDataLoader
+from .utils import l1_regularization
 
 ###-------------------------------------------------------------###
 ##                  VAE WITH ONTOLOGY IN DECODER                 ##
@@ -50,6 +51,10 @@ class OntoVAE(nn.Module):
         self.drop = drop
         self.z_drop = z_drop
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        #############################################
+        self.reg_mask = ontobj.reg_mask[str(top_thresh) + '_' + str(bottom_thresh)]
+        self.combined_mask = ontobj.combined_mask[str(top_thresh) + '_' + str(bottom_thresh)]
+        #############################################
 
         # Encoder
         self.encoder = Encoder(self.in_features,
@@ -104,7 +109,7 @@ class OntoVAE(nn.Module):
         rec_loss = F.mse_loss(reconstruction, data, reduction="sum")
         return torch.mean(rec_loss + kl_coeff*kl_loss)
 
-    def train_round(self, dataloader, lr, kl_coeff, optimizer):
+    def train_round(self, dataloader, lr, kl_coeff, optimizer, l1):
         """
         Parameters
         -------------
@@ -138,16 +143,53 @@ class OntoVAE(nn.Module):
             for i in range(len(self.decoder.decoder)):
                 self.decoder.decoder[i][0].weight.grad = torch.mul(self.decoder.decoder[i][0].weight.grad, self.decoder.masks[i])
 
+            ###############################################
+            # zero out gradients from non-existent connections except in the last mask!
+            #for i in range(len(self.decoder.decoder)-1):
+            #    self.decoder.decoder[i][0].weight.grad = torch.mul(self.decoder.decoder[i][0].weight.grad, self.decoder.masks[i])
+
+            # correct dimensions of the mask (there are 3 neurons per term!)
+            #triple_arrays = []
+            #for col in range(self.combined_mask.shape[1]):
+            #    triple = np.tile(self.combined_mask[:,col],(3,1))
+            #    triple_arrays.append(triple)
+
+            #combined_mask_triple = np.concatenate(triple_arrays, axis = 0).transpose()
+            #combined_tensor = torch.tensor(combined_mask_triple).to(dtype=torch.float32)
+
+            # multiply last mask with combined mask: zero out all connections except preset and defined in the reg_mask
+            #self.decoder.decoder[-1][0].weight.grad = torch.mul(self.decoder.decoder[-1][0].weight.grad, combined_tensor)
+            ###############################################
+
             # perform optimizer step
             optimizer.step()
 
+            ####################### regularization ########################### (lr und l1 gegeben), input weights
+            weights_last_mask = self.decoder.decoder[-1][0].weight.data
+            
+            # correct for neuronnum in the mask with the regularization positions
+            triple_arrays = []
+            for col in range(self.reg_mask.shape[1]):
+                triple = np.tile(self.reg_mask[:,col],(self.neuronnum,1))
+                triple_arrays.append(triple)
+            regularization_pos = np.array(np.concatenate(triple_arrays, axis = 0).transpose(), dtype=bool)         
+
+
+            reg_weights = l1_regularization(weights_last_mask, regularization_pos, l1, lr)
+
+            self.decoder.decoder[-1][0].weight.data = reg_weights
+            #################################################################################################
+
             # make weights in Onto module positive
             for i in range(len(self.decoder.decoder)):
-                self.decoder.decoder[i][0].weight.data = self.decoder.decoder[i][0].weight.data.clamp(0)
+                self.decoder.decoder[i][0].weight.data = torch.tensor(self.decoder.decoder[i][0].weight.data.clamp(0))
+            
+            print(self.decoder.decoder[-1][0].weight.data)
 
         # compute avg training loss
         train_loss = running_loss/len(dataloader)
         return train_loss
+    
 
     def val_round(self, dataloader, kl_coeff):
         """
@@ -178,7 +220,7 @@ class OntoVAE(nn.Module):
         val_loss = running_loss/len(dataloader)
         return val_loss
 
-    def train_model(self, modelpath, lr=1e-4, kl_coeff=1e-4, batch_size=128, epochs=300, log=True, **kwargs):
+    def train_model(self, modelpath, lr=1e-4, l1 = 0, kl_coeff=1e-4, batch_size=128, epochs=300, log=True, **kwargs):
         """
         Parameters
         -------------
@@ -213,7 +255,7 @@ class OntoVAE(nn.Module):
 
         for epoch in range(epochs):
             print(f"Epoch {epoch+1} of {epochs}")
-            train_epoch_loss = self.train_round(trainloader, lr, kl_coeff, optimizer)
+            train_epoch_loss = self.train_round(trainloader, lr, kl_coeff, optimizer, l1)
             val_epoch_loss = self.val_round(valloader, kl_coeff)
             
             if log == True:
