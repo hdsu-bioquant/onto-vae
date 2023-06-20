@@ -126,11 +126,10 @@ class OntoVAE(nn.Module):
 
         # iterate over dataloader for training
         for i, data in tqdm(enumerate(dataloader), total=len(dataloader)):
-
             # move batch to device
             data = data[0].to(self.device)
             optimizer.zero_grad()
-
+ 
             # forward step
             reconstruction, mu, log_var = self.forward(data)
             loss = self.vae_loss(reconstruction, mu, log_var, data, kl_coeff)
@@ -142,28 +141,10 @@ class OntoVAE(nn.Module):
             # zero out gradients from non-existent connections
             for i in range(len(self.decoder.decoder)):
                 self.decoder.decoder[i][0].weight.grad = torch.mul(self.decoder.decoder[i][0].weight.grad, self.decoder.masks[i])
-
-            ###############################################
-            # zero out gradients from non-existent connections except in the last mask!
-            #for i in range(len(self.decoder.decoder)-1):
-            #    self.decoder.decoder[i][0].weight.grad = torch.mul(self.decoder.decoder[i][0].weight.grad, self.decoder.masks[i])
-
-            # correct dimensions of the mask (there are 3 neurons per term!)
-            #triple_arrays = []
-            #for col in range(self.combined_mask.shape[1]):
-            #    triple = np.tile(self.combined_mask[:,col],(3,1))
-            #    triple_arrays.append(triple)
-
-            #combined_mask_triple = np.concatenate(triple_arrays, axis = 0).transpose()
-            #combined_tensor = torch.tensor(combined_mask_triple).to(dtype=torch.float32)
-
-            # multiply last mask with combined mask: zero out all connections except preset and defined in the reg_mask
-            #self.decoder.decoder[-1][0].weight.grad = torch.mul(self.decoder.decoder[-1][0].weight.grad, combined_tensor)
-            ###############################################
-
+    
             # perform optimizer step
             optimizer.step()
-
+   
             ####################### regularization ########################### (lr und l1 gegeben), input weights
             weights_last_mask = self.decoder.decoder[-1][0].weight.data
             
@@ -174,17 +155,13 @@ class OntoVAE(nn.Module):
                 triple_arrays.append(triple)
             regularization_pos = np.array(np.concatenate(triple_arrays, axis = 0).transpose(), dtype=bool)         
 
-
-            reg_weights = l1_regularization(weights_last_mask, regularization_pos, l1, lr)
-
-            self.decoder.decoder[-1][0].weight.data = reg_weights
+            self.decoder.decoder[-1][0].weight.data = l1_regularization(weights_last_mask, regularization_pos, l1, lr)
             #################################################################################################
 
             # make weights in Onto module positive
             for i in range(len(self.decoder.decoder)):
-                self.decoder.decoder[i][0].weight.data = torch.tensor(self.decoder.decoder[i][0].weight.data.clamp(0))
-            
-            print(self.decoder.decoder[-1][0].weight.data)
+                #self.decoder.decoder[i][0].weight.data = torch.tensor(self.decoder.decoder[i][0].weight.data.clamp(0))
+                self.decoder.decoder[i][0].weight.data = (self.decoder.decoder[i][0].weight.data.clamp(0)).detach().clone()
 
         # compute avg training loss
         train_loss = running_loss/len(dataloader)

@@ -373,7 +373,6 @@ class Ontobj():
 
         # replace the last mask with the combined mask
         masks[-1] = combined_mask
-
         #########################################################################
 
         # store changed masks
