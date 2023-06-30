@@ -11,6 +11,7 @@ from tqdm import tqdm
 from .modules import Encoder, Decoder, OntoEncoder, OntoDecoder
 from .fast_data_loader import FastTensorDataLoader
 from .utils import l1_regularization
+from .utils import get_reg_pos
 
 ###-------------------------------------------------------------###
 ##                  VAE WITH ONTOLOGY IN DECODER                 ##
@@ -33,10 +34,10 @@ class OntoVAE(nn.Module):
 
     def __init__(self, ontobj, dataset, top_thresh=1000, bottom_thresh=30, neuronnum=3, drop=0.2, z_drop=0.5):
         super(OntoVAE, self).__init__()
-
+        print(ontobj.reg_mask)
         if not str(top_thresh) + '_' + str(bottom_thresh) in ontobj.genes.keys():
             sys.exit('Available trimming thresholds are: ' + ', '.join(list(ontobj.genes.keys())))
-
+        
         self.ontology = ontobj.description
         self.top = top_thresh
         self.bottom = bottom_thresh
@@ -52,8 +53,10 @@ class OntoVAE(nn.Module):
         self.z_drop = z_drop
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         #############################################
-        self.reg_mask = ontobj.reg_mask[str(top_thresh) + '_' + str(bottom_thresh)]
-        self.combined_mask = ontobj.combined_mask[str(top_thresh) + '_' + str(bottom_thresh)]
+        #self.reg_mask = ontobj.reg_mask[str(top_thresh) + '_' + str(bottom_thresh)]
+        self.reg_mask = ontobj.reg_mask
+        self.reg_pos = get_reg_pos(self.reg_mask, neuronnum)
+        #self.combined_mask = ontobj.combined_mask[str(top_thresh) + '_' + str(bottom_thresh)]
         #############################################
 
         # Encoder
@@ -86,6 +89,7 @@ class OntoVAE(nn.Module):
         sigma = torch.exp(0.5*log_var) 
         eps = torch.randn_like(sigma) 
         return mu + eps * sigma
+
         
     def get_embedding(self, x):
         mu, log_var = self.encoder(x)
@@ -108,7 +112,7 @@ class OntoVAE(nn.Module):
         kl_loss = -0.5 * torch.sum(1. + log_var - mu.pow(2) - log_var.exp(), )
         rec_loss = F.mse_loss(reconstruction, data, reduction="sum")
         return torch.mean(rec_loss + kl_coeff*kl_loss)
-
+    
     def train_round(self, dataloader, lr, kl_coeff, optimizer, l1):
         """
         Parameters
@@ -149,13 +153,13 @@ class OntoVAE(nn.Module):
             weights_last_mask = self.decoder.decoder[-1][0].weight.data
             
             # correct for neuronnum in the mask with the regularization positions
-            triple_arrays = []
-            for col in range(self.reg_mask.shape[1]):
-                triple = np.tile(self.reg_mask[:,col],(self.neuronnum,1))
-                triple_arrays.append(triple)
-            regularization_pos = np.array(np.concatenate(triple_arrays, axis = 0).transpose(), dtype=bool)         
+            #triple_arrays = []
+            #for col in range(self.reg_mask.shape[1]):
+            #    triple = np.tile(self.reg_mask[:,col],(self.neuronnum,1))
+            #    triple_arrays.append(triple)
+            #regularization_pos = np.array(np.concatenate(triple_arrays, axis = 0).transpose(), dtype=bool)         
 
-            self.decoder.decoder[-1][0].weight.data = l1_regularization(weights_last_mask, regularization_pos, l1, lr)
+            self.decoder.decoder[-1][0].weight.data = l1_regularization(weights_last_mask, self.reg_pos, l1, lr)
             #################################################################################################
 
             # make weights in Onto module positive

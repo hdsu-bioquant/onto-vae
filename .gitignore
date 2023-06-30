@@ -1,3 +1,7 @@
 .ipynb_checkpoints
 /onto_vae/__pycache__
 /dist
+01-onto_reg.py
+02-onto_reg_bcat_terms.py
+/masks
+/models

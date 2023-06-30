@@ -3,6 +3,7 @@ import itertools
 import copy
 import pkg_resources
 import torch
+import numpy as np
 
 ########### regularization
 def l1_regularization(weights, pos, l1, lr):
@@ -10,6 +11,14 @@ def l1_regularization(weights, pos, l1, lr):
     weights[pos] = weights[pos] - weights[pos] * norm
     return weights
 
+############# get reg pos
+def get_reg_pos(reg_mask, neuronnum):
+    triple_arrays = []
+    for col in range(reg_mask.shape[1]):
+        triple = np.tile(reg_mask[:,col],(neuronnum,1))
+        triple_arrays.append(triple)
+    regularization_pos = np.array(np.concatenate(triple_arrays, axis = 0).transpose(), dtype=bool) 
+    return regularization_pos 
 
 
 

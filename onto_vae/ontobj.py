@@ -313,6 +313,75 @@ class Ontobj():
         self.genes[str(top_thresh) + '_' + str(bottom_thresh)] = sorted(list(gene_trim.keys()))
         self.desc_genes[str(top_thresh) + '_' + str(bottom_thresh)] = desc_genes
 
+    # if working with pre-processed ontology
+    def change_mask(self, top_thresh=1000, bottom_thresh=30, **kwargs):
+
+        """
+        This function generates the masks for the Onto VAE model.
+            
+        Parameters
+        ----------
+        top_thresh
+            top threshold for trimming
+        bottom_thresh
+            bottom_threshold for trimming
+        
+        The parameters tell the function which trimmed version to use.
+        """
+
+        # check if neccesary objects exist
+        if str(top_thresh) + '_' + str(bottom_thresh) not in self.graph.keys():
+            sys.exit('trimmed graph with specified thresholds missing, trim_dag function needs to be run first!')
+        else:
+            onto_dict = self.graph[str(top_thresh) + '_' + str(bottom_thresh)].copy()
+
+        if str(top_thresh) + '_' + str(bottom_thresh) not in self.annot.keys():
+            sys.exit('trimmed annot with specified thresholds missing, trim_dag function needs to be run first!')
+        else:
+            annot = self.annot[str(top_thresh) + '_' + str(bottom_thresh)].copy()
+
+        if str(top_thresh) + '_' + str(bottom_thresh) not in self.genes.keys():
+            sys.exit('trimmed genes with specified thresholds missing, trim_dag function needs to be run first!')
+        else:
+            genes = self.genes[str(top_thresh) + '_' + str(bottom_thresh)].copy()
+
+        # get all possible depth combos
+        depth = annot.loc[:,['ID', 'depth']]
+        gene_depth = pd.DataFrame({'ID': genes, 'depth': np.max(depth.depth)+1})
+        depth = pd.concat([depth.reset_index(drop=True), gene_depth], axis=0)
+        depth_combos = list(itertools.combinations(list(set(depth['depth'])), 2))
+
+        # create binary matrix for all possible depth combos
+        bin_mat_list = [create_binary_matrix(depth, onto_dict, p[1], p[0]) for p in depth_combos]
+
+        # generate masks for the decoder network
+        levels = ['Level' + str(d) for d in list(set(depth['depth'].tolist()))]
+        mask_cols = [list(levels)[0:i+1][::-1] for i in range(len(levels)-1)]
+        mask_rows = levels[1:]
+
+        idx = [[mat.columns.name in mask_cols[i] and mat.index.name == mask_rows[i] for mat in bin_mat_list] for i in range(len(mask_rows))]
+        masks = [np.array(pd.concat([N for i,N in enumerate(bin_mat_list) if j[i] == True][::-1], axis=1)) for j in idx]
+
+        ########################### change mask here ############################
+        # combine reg_mask with computed mask and change last mask
+        reg_mask = kwargs.get("reg_mask", None)
+        if type(reg_mask) is np.ndarray:
+            # combine mask with pre-set connections with regularisation mask (1 at positions that should be regularized)
+            combined_mask = masks[-1] + reg_mask
+            # set all postions with values > 1 to 1
+            combined_mask[combined_mask > 1] = 1
+
+        # replace the last mask with the combined mask
+        masks[-1] = combined_mask
+        #########################################################################
+
+        # store changed masks
+        self.masks[str(top_thresh) + '_' + str(bottom_thresh)] = masks
+
+        #########################################################################
+        # store mask with regularization positions
+        return reg_mask
+        #########################################################################
 
     def create_masks(self, top_thresh=1000, bottom_thresh=30, **kwargs):
 
