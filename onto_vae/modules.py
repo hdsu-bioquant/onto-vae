@@ -17,12 +17,17 @@ class Encoder(nn.Module):
     This class constructs an Encoder module for a variational autoencoder.
 
     Parameters
-    -------------
-    in_features: # of features that are used as input
-    layer_dims: list giving the dimensions of the hidden layers
-    latent_dim: latent dimension
-    drop: dropout rate, default is 0
-    z_drop: dropout rate for latent space, default is 0.5
+    ----------
+    in_features
+        # of features that are used as input
+    layer_dims
+        list giving the dimensions of the hidden layers
+    latent_dim 
+        latent dimension
+    drop
+        dropout rate, default is 0
+    z_drop
+        dropout rate for latent space, default is 0.5
     """
 
     def __init__(self, in_features, latent_dim, layer_dims=[512], drop=0, z_drop=0.5):
@@ -72,11 +77,6 @@ class Encoder(nn.Module):
         c = x
         for layer in self.encoder:
             c = layer(c)
-        #c = c.view(-1, 2, self.latent_dim)
-
-        # get 'mu' and 'log-var'
-        #mu = c[:, 0, :]
-        #log_var = c[:, 1, :]
 
         mu = self.mu(c)
         log_var = self.logvar(c)
@@ -96,14 +96,18 @@ class Decoder(nn.Module):
     This class constructs a Decoder module for a variational autoencoder.
 
     Parameters
-    -------------
-    in_features: # of features that are used as input
-    layer_dims: list giving the dimensions of the hidden layers
-    latent_dim: latent dimension, default is 128
-    dr: dropout rate, default is 0
+    ----------
+    in_features
+        # of features that are used as input
+    layer_dims
+        list giving the dimensions of the hidden layers
+    latent_dim
+        latent dimension, default is 128
+    drop
+        dropout rate, default is 0
     """
 
-    def __init__(self, in_features, latent_dim, layer_dims=[512], drop=0):
+    def __init__(self, in_features, latent_dim, layer_dims=[512], drop=0, z_drop=0.5):
         super(Decoder, self).__init__()
 
         self.in_features = in_features
@@ -156,18 +160,23 @@ class Decoder(nn.Module):
 
 class OntoEncoder(nn.Module):
     """
-    This class constructs a Encoder module that is structured like an ontology and following a DAG.
+    This class constructs an ontology structured Encoder module.
 
     Parameters
-    --------------
-    in_features: # of features that are used as input
-    layer_dims: list of tuples that define in and out for each layer
-    mask_list: matrix for each layer transition, that determines which weights to zero out
-    drop: dropout rate, default is 0
-    z_drop: dropout rate for latent space, default is 0.5
+    ----------
+    in_features
+        of features that are used as input
+    layer_dims
+        list of tuples that define in and out for each layer
+    mask_list
+        matrix for each layer transition, that determines which weights to zero out
+    drop
+        dropout rate, default is 0
+    z_drop
+        dropout rate for latent space, default is 0.5
     """ 
 
-    def __init__(self, in_features, layer_dims, mask_list, drop=0, z_drop=0.5):
+    def __init__(self, in_features, layer_dims, mask_list, latent_dim, neuronnum=3):
         super(OntoEncoder, self).__init__()
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -223,12 +232,6 @@ class OntoEncoder(nn.Module):
             c = layer(out)
             out = torch.cat((c, out), dim=1)
 
-        #c = c.view(-1, 2, self.latent_dim)
-
-        # get 'mu' and 'log-var'
-        #mu = lat[:, 0, :]
-        #log_var = lat[:, 1, :]
-
         mu = self.mu(out)
         log_var = self.logvar(out)
 
@@ -243,19 +246,21 @@ class OntoEncoder(nn.Module):
 
 class OntoDecoder(nn.Module):
     """
-    This class constructs a Decoder module that is structured like an ontology and following a DAG.
+    This class constructs an ontology structured Decoder module.
   
     Parameters
-    ---------------
-    in_features: # of features that are used as input
-    study_num: # of different studys that the samples belong to
-    layer_dims: list of tuples that define in and out for each layer
-    mask_list: matrix for each layer transition, that determines which weights to zero out
-    latent_dim: latent dimension
-    drop: dropout rate, default is 0
+    ----------
+    in_features
+        # of features that are used as input
+    layer_dims
+        list of tuples that define in and out for each layer
+    mask_list
+        matrix for each layer transition, that determines which weights to zero out
+    latent_dim
+        latent dimension
     """ 
 
-    def __init__(self, in_features, layer_dims, mask_list, latent_dim, neuronnum=1, drop=0):
+    def __init__(self, in_features, layer_dims, mask_list, latent_dim, neuronnum=3):
         super(OntoDecoder, self).__init__()
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -269,7 +274,6 @@ class OntoDecoder(nn.Module):
             self.masks.append(m.to(self.device))
         self.masks.append(mask_list[-1].repeat_interleave(neuronnum, dim=1).to(self.device))
         self.latent_dim = latent_dim
-        self.drop = drop
 
         # Decoder
         self.decoder = nn.ModuleList(
@@ -278,8 +282,7 @@ class OntoDecoder(nn.Module):
 
             [
                 nn.Sequential(
-                    nn.Linear(self.layer_shapes[-1][0], self.in_features)#,
-                    #nn.Sigmoid()
+                    nn.Linear(self.layer_shapes[-1][0], self.in_features)
                 )
             ]
             ).to(self.device)
@@ -294,9 +297,7 @@ class OntoDecoder(nn.Module):
 
     def build_block(self, ins, outs):
         return nn.Sequential(
-            nn.Linear(ins, outs)#,
-            #nn.Dropout(p=self.drop),
-            #nn.Sigmoid()
+            nn.Linear(ins, outs)
         )
 
     def forward(self, z):
