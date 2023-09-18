@@ -4,9 +4,9 @@
 
 OntoVAE is a package that can be used to integrate biological ontologies into latent space and decoder of Variational Autoencoder models. 
 This allows direct retrieval of pathway activities from the model.
-OntoVAE can also be used to simulate genetic or drug induced perturbations, as demonstrated in our manuscript 
+OntoVAE can also be used to simulate genetic or drug induced perturbations, as demonstrated in our Bioinformatics paper
 'Biologically informed variational autoencoders allow predictive modeling of genetic and drug induced perturbations':
-https://www.biorxiv.org/content/10.1101/2022.09.20.508703v2
+https://academic.oup.com/bioinformatics/article/39/6/btad387/7199588
 
 ## Installation
 
@@ -39,5 +39,5 @@ https://figshare.com/projects/OntoVAE_Ontology_guided_VAE_manuscript/146727
 
 If you use OntoVAE for your research, please cite:
 ```
-Doncevic, D., Herrmann, C. Biologically informed variational autoencoders allow predictive modeling of genetic and drug induced perturbations. bioRxiv (2022) doi: https://doi.org/10.1101/2022.09.20.508703 
+Daria Doncevic, Carl Herrmann, Biologically informed variational autoencoders allow predictive modeling of genetic and drug-induced perturbations, Bioinformatics, Volume 39, Issue 6, June 2023, btad387, https://doi.org/10.1093/bioinformatics/btad387
 ```
