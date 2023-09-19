@@ -8,6 +8,48 @@ from torch import optim
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+
+###-------------------------------------------------------------###
+##                        CLASSIFIER                             ##
+###-------------------------------------------------------------###
+
+class simple_classifier(nn.Module):
+    """
+    This classifier takes in the pathway activities and performs classification
+
+    Parameters
+    -------------
+    in_features: dimension of decoder pathway activities
+    n_classes: number of classes
+    """
+
+    def __init__(self, in_features, n_classes, drop=0.5):
+        super(simple_classifier, self).__init__()
+
+        self.in_features = in_features
+        self.n_classes = n_classes
+        self.drop=drop
+     
+        self.classifier = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Linear(self.in_features, self.n_classes),
+                    nn.Dropout(p=self.drop),
+                    nn.Sigmoid()
+                )
+            ] 
+        )
+
+    def forward(self, x):
+
+        c = x
+        for layer in self.classifier:
+            c = layer(c)
+
+        return c
+
+
 ###-------------------------------------------------------------###
 ##                       ENCODER CLASS                           ##
 ###-------------------------------------------------------------###
@@ -258,9 +300,15 @@ class OntoDecoder(nn.Module):
         matrix for each layer transition, that determines which weights to zero out
     latent_dim
         latent dimension
+    batches
+        batch information of samples if available
+    one_hot
+        one-hot encoder for batch information if available
+    neuronnum
+        number of neurons to use per term
     """ 
 
-    def __init__(self, in_features, layer_dims, mask_list, latent_dim, neuronnum=3):
+    def __init__(self, in_features, layer_dims, mask_list, latent_dim, n_batch, one_hot=None, neuronnum=3):
         super(OntoDecoder, self).__init__()
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -274,6 +322,14 @@ class OntoDecoder(nn.Module):
             self.masks.append(m.to(self.device))
         self.masks.append(mask_list[-1].repeat_interleave(neuronnum, dim=1).to(self.device))
         self.latent_dim = latent_dim
+        self.n_batch = n_batch
+        self.one_hot = one_hot.to(self.device) if one_hot is not None else one_hot
+
+        # set batch information
+        if self.n_batch > 0:
+            self.layer_shapes[-1] = (self.layer_shapes[-1][0] + self.n_batch, self.layer_shapes[-1][1]) # concatenate batch dim to pathway activity dim
+            self.masks[-1] = torch.hstack((self.masks[-1], torch.ones(self.masks[-1].shape[0], self.n_batch).to(self.device))) # concatenate batch vectors to masks (set to 1)
+
 
         # Decoder
         self.decoder = nn.ModuleList(
@@ -300,7 +356,7 @@ class OntoDecoder(nn.Module):
             nn.Linear(ins, outs)
         )
 
-    def forward(self, z):
+    def forward(self, z, batch=None):
 
         # decoding
         out = z
@@ -308,6 +364,20 @@ class OntoDecoder(nn.Module):
         for layer in self.decoder[:-1]:
             c = layer(out)
             out = torch.cat((c, out), dim=1)
+
+        # attach batch info
+        if batch is not None:
+            if next(self.parameters()).is_cuda:
+                out = torch.hstack((out, self.one_hot[batch]))
+            else:
+                out = torch.hstack((out, self.one_hot.to('cpu')[batch]))
+        if batch is None and self.n_batch > 0:
+            if next(self.parameters()).is_cuda:
+                out = torch.hstack((out, torch.zeros((out.shape[0])).repeat(self.n_batch,1).T.to(self.device)))
+            else:
+                out = torch.hstack((out, torch.zeros((out.shape[0])).repeat(self.n_batch,1).T.to('cpu')))
+        
+        # final decoding layer
         reconstruction = self.decoder[-1](out)
         
         return reconstruction
