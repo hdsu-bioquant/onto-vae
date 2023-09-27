@@ -308,7 +308,7 @@ class OntoVAE(nn.Module):
             run["metrics/" + mode + "/clf_loss"].log(clf_loss)
         return clf_loss
 
-    def train_round(self, dataloader, lr, kl_coeff, clf_coeff, optimizer, run=None):
+    def train_round(self, dataloader, kl_coeff, clf_coeff, optimizer, run=None):
         """
         Parameters
         ----------
@@ -474,7 +474,7 @@ class OntoVAE(nn.Module):
 
         for epoch in range(epochs):
             print(f"Epoch {epoch+1} of {epochs}")
-            train_epoch_loss = self.train_round(trainloader, lr, kl_coeff, clf_coeff, optimizer, run)
+            train_epoch_loss = self.train_round(trainloader, kl_coeff, clf_coeff, optimizer, run)
             val_epoch_loss = self.val_round(valloader, kl_coeff, clf_coeff, run)
             
             if run is not None:
@@ -1174,9 +1174,25 @@ class VAE(nn.Module):
         dropout rate, default is 0
     z_drop
         dropout rate for latent space, default is 0.5
+    labels
+        labels of samples if classifier is used
+    batches
+        batch information of samples if available
     """
 
-    def __init__(self, data, layer_dims_enc=[1000], layer_dims_dec=[1000], latent_dim=128, drop=0.2, z_drop=0.5):
+    def __init__(
+        self, 
+        data, 
+        layer_dims_enc=[1000], 
+        layer_dims_dec=[1000], 
+        latent_dim=128, 
+        drop=0.2, 
+        z_drop=0.5,
+        labels=None,
+        batches=None,
+        modelpath=None
+        ):
+
         super(VAE, self).__init__()
 
         self.X = data
@@ -1187,7 +1203,41 @@ class VAE(nn.Module):
         self.drop = drop
         self.z_drop = z_drop
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.labels = labels
+        self.batches = batches
+        self.one_hot = None
+        self.VAE_trained = False
+        self.clf_trained = False
+        self.modelpath = modelpath
 
+        # set labels (or dummies) for classification
+        if self.labels is not None:
+            self.y = self.labels
+        else:
+            self.y = np.zeros(self.X.shape[0])
+        self.n_classes = len(set(self.y))
+
+        # set batches (or dummies) for batch correction
+        if self.batches is not None:
+            self.n_batch = len(set(self.batches))
+            self.one_hot = torch.eye(self.n_batch).to(self.device)
+            self.batch_info = self.batches
+        else:
+            self.n_batch = 0
+            self.batch_info = np.zeros(self.X.shape[0])
+
+        # parse model information if pretrained model was passed
+        if self.modelpath is not None:
+            checkpoint = torch.load(modelpath,
+                        map_location = torch.device(self.device))
+            self.VAE_trained = True
+            self.val_loss_min = checkpoint['loss']
+            if checkpoint['classifier_trained']:
+                self.clf_trained = True
+                self.n_classes = checkpoint['n_classes']
+            if checkpoint['batch_corrected']:
+                self.n_batch = checkpoint['n_batch']
+                self.one_hot = torch.eye(self.n_batch).to(self.device)
         # Encoder
         self.encoder = Encoder(self.in_features,
                                 self.latent_dim,
@@ -1201,6 +1251,14 @@ class VAE(nn.Module):
                                 self.layer_dims_dec,
                                 self.drop)
 
+        # Classifier (optional)
+        if self.labels is not None:
+            self.classifier = simple_classifier(in_features=self.latent_dim,
+                                             n_classes=self.n_classes)
+
+        # load parameters if pretrained model was passed
+        if self.modelpath is not None:
+            self.load_state_dict(checkpoint['model_state_dict'], strict=False)   
         
     def reparameterize(self, mu, log_var):
         """
@@ -1215,7 +1273,7 @@ class VAE(nn.Module):
         eps = torch.randn_like(sigma) 
         return mu + eps * sigma
         
-    def get_embedding(self, x):
+    def get_embedding(self, x, batch=None):
         """
         Generates latent space embedding.
 
@@ -1224,15 +1282,30 @@ class VAE(nn.Module):
         x
             dataset of which embedding should be generated
         """
+        # attach batch information
+        if batch is not None:
+            x = torch.hstack((x, self.one_hot[batch]))
+        if batch is None and self.n_batch > 0:
+            x = torch.hstack((x, torch.zeros((x.shape[0])).repeat(self.n_batch,1).T.to(self.device)))
+
         # set to eval mode
         self.eval()
 
-        # run data through encoder
+        # encoding
         mu, log_var = self.encoder(x)
+
+        # sample from latent space
         embedding = self.reparameterize(mu, log_var)
         return embedding
 
-    def forward(self, x):
+    def forward(self, x, batch=None):
+
+        # attach batch information
+        if batch is not None:
+            x = torch.hstack((x, self.one_hot[batch]))
+        if batch is None and self.n_batch > 0:
+            x = torch.hstack((x, torch.zeros((x.shape[0])).repeat(self.n_batch,1).T.to(self.device)))
+
         # encoding
         mu, log_var = self.encoder(x)
             
@@ -1241,12 +1314,56 @@ class VAE(nn.Module):
 
         # decoding
         reconstruction = self.decoder(z)
-            
-        return reconstruction, mu, log_var
+        
+        if self.labels is not None:
+            output = self.classifier(z)
+            return reconstruction, mu, log_var, output
+        else:
+            return reconstruction, mu, log_var
+    
+    def get_classification(self, dataset, batch=None):
+        """
+        Parameters
+        ----------
+        dataset
+            which dataset to use for pathway activity retrieval
+        """
+        # convert data to tensor 
+        data = torch.tensor(dataset, dtype=torch.float32).to(self.device)
+
+        # attach batch information
+        if batch is not None:
+            data = torch.hstack((data, self.one_hot[batch]))
+        if batch is None and self.n_batch > 0:
+            data = torch.hstack((data, torch.zeros((data.shape[0])).repeat(self.n_batch,1).T.to(self.device)))
+
+        # set to eval mode
+        self.eval()
+
+        with torch.no_grad():
+            # encoding
+            mu, log_var = self.encoder(data)
+
+            # sample from latent space
+            z = self.reparameterize(mu, log_var)
+
+        # perform classification
+        with torch.no_grad():
+            output = self.classifier(z)
+
+        output = output.to('cpu').detach().numpy()
+        y_pred = np.argmax(output,axis=1)
+
+        return y_pred
 
     def vae_loss(self, reconstruction, mu, log_var, data, kl_coeff, mode='train', run=None):
         """
-        Calculates VAE loss as combination of reconstruction loss and weighted Kullback-Leibler loss.
+        Parameters
+        ----------
+        mode
+            'train' or 'val' (default): for logging
+        run
+            Neptune run if training is to be logged
         """
         kl_loss = -0.5 * torch.sum(1. + log_var - mu.pow(2) - log_var.exp(), )
         rec_loss = F.mse_loss(reconstruction, data, reduction="sum")
@@ -1254,6 +1371,21 @@ class VAE(nn.Module):
             run["metrics/" + mode + "/kl_loss"].log(kl_loss)
             run["metrics/" + mode + "/rec_loss"].log(rec_loss)
         return torch.mean(rec_loss + kl_coeff*kl_loss)
+
+    def classify_loss(self, class_output, y, mode='val', run=None):
+        """
+        Parameters
+        ----------
+        mode
+            'train' or 'val' (default): for logging
+        run
+            Neptune run if training is to be logged
+        """
+        class_loss = nn.CrossEntropyLoss()
+        clf_loss = class_loss(class_output, y)
+        if run is not None:
+            run["metrics/" + mode + "/clf_loss"].log(clf_loss)
+        return clf_loss
 
     def train_round(self, dataloader, lr, kl_coeff, optimizer, run=None):
         """
@@ -1277,15 +1409,31 @@ class VAE(nn.Module):
         running_loss = 0.0
 
         # iterate over dataloader for training
-        for i, data in tqdm(enumerate(dataloader), total=len(dataloader)):
+        for i, minibatch in tqdm(enumerate(dataloader), total=len(dataloader)):
 
             # move batch to device
-            data = data[0].to(self.device)
+            data = minibatch[0].to(self.device)
+            batch = minibatch[2].to(self.device)
+            if self.batches is None:
+                batch=None
+
+            # reset optimizer
             optimizer.zero_grad()
 
             # forward step
-            reconstruction, mu, log_var = self.forward(data)
+            if self.labels is not None:
+                reconstruction, mu, log_var, output = self.forward(data, batch)
+            else:
+                reconstruction, mu, log_var = self.forward(data, batch)
+            
+            # calculate VAE loss
             loss = self.vae_loss(reconstruction, mu, log_var, data, kl_coeff, mode='train', run=run)
+
+            # add classifier loss
+            if self.labels is not None:
+                class_loss = self.classify_loss(output, minibatch[1].to(self.device), mode='train', run=run)
+                loss += clf_coeff * class_loss
+
             running_loss += loss.item()
 
             # backward propagation
@@ -1317,21 +1465,34 @@ class VAE(nn.Module):
 
         with torch.no_grad():
             # iterate over dataloader for validation
-            for i, data in tqdm(enumerate(dataloader), total=len(dataloader)):
+            for i, minibatch in tqdm(enumerate(dataloader), total=len(dataloader)):
 
                 # move batch to device
-                data = data[0].to(self.device)
+                data = minibatch[0].to(self.device)
+                batch = minibatch[2].to(self.device)
+                if self.batches is None:
+                    batch=None
 
                 # forward step
-                reconstruction, mu, log_var = self.forward(data)
+                if self.labels is not None:
+                    reconstruction, mu, log_var, output = self.forward(data, batch)
+                else:
+                    reconstruction, mu, log_var = self.forward(data, batch)
+
                 loss = self.vae_loss(reconstruction, mu, log_var,data, kl_coeff, mode='val', run=run)
+                
+                # add classification loss
+                if self.labels is not None:
+                    class_loss = self.classify_loss(output, minibatch[1].to(self.device), mode='val', run=run)
+                    loss += clf_coeff * class_loss
+
                 running_loss += loss.item()
 
         # compute avg val loss
         val_loss = running_loss/len(dataloader)
         return val_loss
 
-    def train_model(self, modelpath, lr=1e-4, kl_coeff=1e-4, batch_size=128, epochs=300, run=None):
+    def train_model(self, modelpath, lr=1e-4, kl_coeff=1e-4, clf_coeff=1e5, batch_size=128, epochs=300, run=None):
         """
         Parameters
         ----------
@@ -1341,6 +1502,8 @@ class VAE(nn.Module):
             learning rate
         kl_coeff
             Kullback Leibler loss coefficient
+        clf_coeff
+            coefficient for weighting classifier loss
         batch_size
             size of minibatches
         epochs
@@ -1350,19 +1513,24 @@ class VAE(nn.Module):
         """
         # train-test split
         indices = np.random.RandomState(seed=42).permutation(self.X.shape[0])
-        X_train_ind = indices[:round(len(indices)*0.8)]
-        X_val_ind = indices[round(len(indices)*0.8):]
-        X_train, X_val = self.X[X_train_ind,:], self.X[X_val_ind,:]
+        train_ind = indices[:round(len(indices)*0.8)]
+        val_ind = indices[round(len(indices)*0.8):]
+        X_train, y_train, batch_train = self.X[train_ind,:], self.y[train_ind], self.batch_info[train_ind]
+        X_val, y_val, batch_val = self.X[val_ind,:], self.y[val_ind], self.batch_info[val_ind]
 
         # convert train and val into torch tensors
-        X_train = torch.tensor(X_train, dtype=torch.float32)
-        X_val = torch.tensor(X_val, dtype=torch.float32)
+        X_train, y_train, batch_train = torch.tensor(X_train, dtype=torch.float32), torch.tensor(y_train), torch.tensor(batch_train)
+        X_val, y_val, batch_val = torch.tensor(X_val, dtype=torch.float32), torch.tensor(y_val), torch.tensor(batch_val)
 
         # generate dataloaders
         trainloader = FastTensorDataLoader(X_train, 
+                                           y_train,
+                                           batch_train,
                                        batch_size=batch_size, 
                                        shuffle=True)
         valloader = FastTensorDataLoader(X_val, 
+                                         y_val,
+                                         batch_val,
                                         batch_size=batch_size, 
                                         shuffle=False)
 
@@ -1371,8 +1539,8 @@ class VAE(nn.Module):
 
         for epoch in range(epochs):
             print(f"Epoch {epoch+1} of {epochs}")
-            train_epoch_loss = self.train_round(trainloader, lr, kl_coeff, optimizer, run)
-            val_epoch_loss = self.val_round(valloader, kl_coeff, run)
+            train_epoch_loss = self.train_round(trainloader, lr, kl_coeff, clf_coeff, optimizer, run)
+            val_epoch_loss = self.val_round(valloader, kl_coeff, clf_coeff, run)
             
             if run is not None:
                 run["metrics/train/loss"].log(train_epoch_loss)
@@ -1385,6 +1553,10 @@ class VAE(nn.Module):
                     'model_state_dict': self.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': val_epoch_loss,
+                    'classifier_trained': True if self.labels is not None else False,
+                    'n_classes': self.n_classes,
+                    'batch_corrected': True if self.n_batch > 0 else False,
+                    'n_batch': self.n_batch
                 }, modelpath)
                 val_loss_min = val_epoch_loss
                 
