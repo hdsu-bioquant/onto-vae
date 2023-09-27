@@ -172,6 +172,9 @@ class OntoVAE(nn.Module):
         if batch is None and self.n_batch > 0:
             x = torch.hstack((x, torch.zeros((x.shape[0])).repeat(self.n_batch,1).T.to(self.device)))
 
+        # set to eval mode
+        self.eval()
+
         # encoding
         mu, log_var = self.encoder(x)
 
@@ -237,11 +240,15 @@ class OntoVAE(nn.Module):
         if batch is None and self.n_batch > 0:
             data = torch.hstack((data, torch.zeros((data.shape[0])).repeat(self.n_batch,1).T.to(self.device)))
 
-        # encoding
-        mu, log_var = self.encoder(data)
+        # set to eval mode
+        self.eval()
 
-        # sample from latent space
-        z = self.reparameterize(mu, log_var)
+        with torch.no_grad():
+            # encoding
+            mu, log_var = self.encoder(data)
+
+            # sample from latent space
+            z = self.reparameterize(mu, log_var)
         
         # attach hooks for classification
         activation = {}
@@ -249,7 +256,8 @@ class OntoVAE(nn.Module):
         self._attach_hooks(activation=activation, hooks=hooks)
 
         # decoding
-        reconstruction = self.decoder(z, batch)
+        with torch.no_grad():
+            reconstruction = self.decoder(z, batch)
         
         # get activation values
         act = torch.cat(list(activation.values()), dim=1)
@@ -257,7 +265,10 @@ class OntoVAE(nn.Module):
         act = torch.stack(list(torch.split(act, self.neuronnum, dim=1)), dim=0).mean(dim=2).T
 
         # perform classification
-        output = self.classifier(act)
+        with torch.no_grad():
+            output = self.classifier(act)
+        
+        # remove hooks
         for h in hooks:
             hooks[h].remove()
 
@@ -779,6 +790,10 @@ class OntoEncVAE(nn.Module):
         x
             dataset of which embedding should be generated
         """
+        # set to eval mode
+        self.eval()
+
+        # run data through encoder
         mu, log_var = self.encoder(x)
         embedding = self.reparameterize(mu, log_var)
         return embedding
@@ -1209,6 +1224,10 @@ class VAE(nn.Module):
         x
             dataset of which embedding should be generated
         """
+        # set to eval mode
+        self.eval()
+
+        # run data through encoder
         mu, log_var = self.encoder(x)
         embedding = self.reparameterize(mu, log_var)
         return embedding
