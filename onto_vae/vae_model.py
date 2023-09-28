@@ -1239,7 +1239,7 @@ class VAE(nn.Module):
                 self.n_batch = checkpoint['n_batch']
                 self.one_hot = torch.eye(self.n_batch).to(self.device)
         # Encoder
-        self.encoder = Encoder(self.in_features,
+        self.encoder = Encoder(self.in_features + self.n_batch,
                                 self.latent_dim,
                                 self.layer_dims_enc,
                                 self.drop,
@@ -1387,7 +1387,7 @@ class VAE(nn.Module):
             run["metrics/" + mode + "/clf_loss"].log(clf_loss)
         return clf_loss
 
-    def train_round(self, dataloader, lr, kl_coeff, optimizer, run=None):
+    def train_round(self, dataloader, kl_coeff, clf_coeff, optimizer, run=None):
         """
         Parameters
         ----------
@@ -1397,6 +1397,8 @@ class VAE(nn.Module):
             learning rate
         kl_coeff
             coefficient for weighting Kullback-Leibler loss
+        clf_coeff
+            coefficient for weighting classifier loss
         optimizer
             optimizer for training
         run
@@ -1446,7 +1448,7 @@ class VAE(nn.Module):
         train_loss = running_loss/len(dataloader)
         return train_loss
 
-    def val_round(self, dataloader, kl_coeff, run=None):
+    def val_round(self, dataloader, kl_coeff, clf_coeff, run=None):
         """
         Parameters
         ----------
@@ -1454,6 +1456,8 @@ class VAE(nn.Module):
             pytorch dataloader instance with training data
         kl_coeff
             coefficient for weighting Kullback-Leibler loss
+        clf_coeff
+            coefficient for weighting classifier loss
         run
             Neptune run if training is to be logged
         """
@@ -1539,7 +1543,7 @@ class VAE(nn.Module):
 
         for epoch in range(epochs):
             print(f"Epoch {epoch+1} of {epochs}")
-            train_epoch_loss = self.train_round(trainloader, lr, kl_coeff, clf_coeff, optimizer, run)
+            train_epoch_loss = self.train_round(trainloader, kl_coeff, clf_coeff, optimizer, run)
             val_epoch_loss = self.val_round(valloader, kl_coeff, clf_coeff, run)
             
             if run is not None:
