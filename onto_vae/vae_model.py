@@ -1247,7 +1247,7 @@ class VAE(nn.Module):
         
         # Decoder
         self.decoder = Decoder(self.in_features,
-                                self.latent_dim,
+                                self.latent_dim + self.n_batch,
                                 self.layer_dims_dec,
                                 self.drop)
 
@@ -1312,8 +1312,15 @@ class VAE(nn.Module):
         # sample from latent space
         z = self.reparameterize(mu, log_var)
 
+        # attach batch information again
+        if batch is not None:
+            zb = torch.hstack((z, self.one_hot[batch]))
+        elif batch is None and self.n_batch > 0:
+            zb = torch.hstack((z, torch.zeros((z.shape[0])).repeat(self.n_batch,1).T.to(self.device)))
+        else:
+            zb = z
         # decoding
-        reconstruction = self.decoder(z)
+        reconstruction = self.decoder(zb)
         
         if self.labels is not None:
             output = self.classifier(z)
