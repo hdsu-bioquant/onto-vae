@@ -8,6 +8,11 @@ OntoVAE can also be used to simulate genetic or drug induced perturbations, as d
 'Biologically informed variational autoencoders allow predictive modeling of genetic and drug induced perturbations':
 https://academic.oup.com/bioinformatics/article/39/6/btad387/7199588
 
+## Note
+
+This repo is not being maintained anymore. The code for the OntoVAE model is now also hosted under https://github.com/hdsu-bioquant/cobra-ai
+
+
 ## Installation
 
 ```
